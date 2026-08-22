@@ -1,0 +1,8 @@
+{
+  "slug": "idlebartender",
+  "name": "Idle Bartender",
+  "bundleId": "com.andusystems.games.idlebartender",
+  "orientation": "portrait",
+  "icon": "spriteforge:REPLACE_WITH_ASSET_ID",
+  "splash": "spriteforge:REPLACE_WITH_ASSET_ID"
+}
