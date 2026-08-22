@@ -104,16 +104,23 @@ class MainScene extends Phaser.Scene {
       color: COLORS.faint,
     }).setOrigin(0.5);
 
-    // Load prior save (server reconciles with local; see SDK). Restore only the scoreboard.
-    const loaded = (await games.load()) as Partial<SaveState> | null;
-    if (loaded && typeof loaded.wins === "number" && typeof loaded.losses === "number" && typeof loaded.draws === "number") {
-      state = { wins: loaded.wins, losses: loaded.losses, draws: loaded.draws, formatVersion: 1 };
-    }
-
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onPointer(p));
     this.scale.on("resize", () => this.layout());
 
+    // Draw the board IMMEDIATELY — rendering must never be gated on the SDK or network.
     this.layout();
+
+    // Restore the scoreboard in the background. Local-first + resilient: a slow, hanging,
+    // or failed load (e.g. no backend reachable) must never blank the game.
+    try {
+      const loaded = (await games.load()) as Partial<SaveState> | null;
+      if (loaded && typeof loaded.wins === "number" && typeof loaded.losses === "number" && typeof loaded.draws === "number") {
+        state = { wins: loaded.wins, losses: loaded.losses, draws: loaded.draws, formatVersion: 1 };
+        this.updateScore();
+      }
+    } catch {
+      /* local-first — ignore load failures; the board is already up */
+    }
   }
 
   // ---- Input -------------------------------------------------------------
