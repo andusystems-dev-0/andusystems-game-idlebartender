@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#0b1e3f" />
+    <meta name="theme-color" content="#120c05" />
     <!-- Launch full-screen (no Safari chrome) when opened from the iOS home screen. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -20,7 +20,8 @@
         margin: 0;
         padding: 0;
         height: 100%;
-        background: #0b1e3f;
+        /* dark warm tone matching the bar, so any sliver the canvas doesn't cover blends in */
+        background: #120c05;
         overflow: hidden;
       }
       /* Pin to the *visible* viewport. On mobile Safari 100vh includes the area behind the toolbars,
@@ -35,6 +36,17 @@
         height: 100dvh; /* visible viewport on modern mobile */
         overflow: hidden;
         touch-action: none;
+      }
+      /* Home-screen app: fill the whole screen (incl. behind the home indicator), no bottom gap.
+         CSS-level guarantee in case the JS detection is late. */
+      @media all and (display-mode: standalone) {
+        #game {
+          top: 0;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          height: auto;
+        }
       }
       #game canvas {
         display: block;

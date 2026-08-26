@@ -39,7 +39,22 @@ window.addEventListener("beforeunload", flush);
 const supportsDvh = typeof CSS !== "undefined" && !!CSS.supports && CSS.supports("height", "100dvh");
 const isStandalone = () =>
   (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
-  (navigator as unknown as { standalone?: boolean }).standalone === true;
+  (navigator as unknown as { standalone?: boolean }).standalone === true ||
+  // heuristic fallback: a portrait view that already fills the device height is running chrome-less
+  (window.innerWidth < window.innerHeight &&
+    typeof screen !== "undefined" &&
+    window.innerHeight >= (screen.height || 0) * 0.92);
+
+// Read a CSS env(safe-area-inset-*) value in CSS pixels (Dynamic Island / notch / home indicator).
+const cssInset = (name: "top" | "bottom"): number => {
+  const d = document.createElement("div");
+  d.style.cssText = `position:fixed;visibility:hidden;padding-top:env(safe-area-inset-${name});`;
+  document.body.appendChild(d);
+  const v = parseFloat(getComputedStyle(d).paddingTop) || 0;
+  d.remove();
+  return v;
+};
+
 const fitViewport = () => {
   const el = document.getElementById("game");
   if (el) {
@@ -56,6 +71,10 @@ const fitViewport = () => {
       el.style.height = `${window.innerHeight}px`;
     }
   }
+  // expose safe-area insets to the game in design-space pixels so the HUD can dodge the notch/island
+  const factor = DESIGN.h / Math.max(1, window.innerHeight);
+  G.T.safeTop = cssInset("top") * factor;
+  G.T.safeBottom = cssInset("bottom") * factor;
   if (game.scale) game.scale.refresh();
 };
 game.events.once("ready", fitViewport);

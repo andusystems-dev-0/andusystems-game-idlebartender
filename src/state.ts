@@ -36,8 +36,16 @@ function fresh(): Persist {
 }
 
 export const S: Persist = fresh();
-// Transient (not saved): combo tracking + last-offline result + modal flag.
-export const T = { comboCount: 0, lastMergeMs: -1e9, offlineEarned: 0, offlineSeconds: 0, modalOpen: false };
+// Transient (not saved): combo tracking, last-offline result, modal flag, safe-area insets (design px).
+export const T = {
+  comboCount: 0,
+  lastMergeMs: -1e9,
+  offlineEarned: 0,
+  offlineSeconds: 0,
+  modalOpen: false,
+  safeTop: 0,
+  safeBottom: 0,
+};
 
 // ── Save / load / offline ───────────────────────────────────────────────────
 export function load() {
