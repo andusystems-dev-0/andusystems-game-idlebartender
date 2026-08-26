@@ -3,44 +3,51 @@ import Phaser from "phaser";
 // be served stale from the CDN/browser immutable cache.
 import bgUrl from "./assets/background.jpg";
 import shotUrl from "./assets/shot.png";
+import secondUrl from "./assets/second.png";
 
-// Idle Bartender — iteration 1. A full shot always waits at the bartender's end. You grab it and must
-// FLICK it up the bar: a real flick launches it and it glides to rest up the counter (and stays there);
-// a weak/slow release just resets it back to the bottom. A fresh shot appears at the bottom after each
-// flick, so there's always one ready.
+// Idle Bartender — iteration 2. A full shot always waits at the bartender's end. You FLICK it up the bar
+// and it glides to rest. When two drinks of the SAME kind touch they combine into the next drink in the
+// sequence (shot → second …). Two DIFFERENT drinks can't combine, so they bounce off each other.
 //
 // Design canvas matches the background art (720x1280, portrait). Scale.ENVELOP fills the whole screen.
 const DESIGN_W = 720;
 const DESIGN_H = 1280;
 const CENTER_X = DESIGN_W * 0.5;
 
+// The drink sequence — each tier's texture. Index 0 is what you flick; touching two of a tier upgrades
+// to the next. The last tier can't upgrade further (two of them just bounce).
+const TIER_TEX = ["shot", "second"];
+const MAX_TIER = TIER_TEX.length - 1;
+const PUCK_CAP = 16; // safety bound on drinks on the table
+
 // The playable wooden table is a perspective trapezoid: wide at the near/bottom edge, narrow at the far
-// counter end. Shot scale interpolates near→far by height.
+// counter end. Measured from the background art. Shot scale interpolates near→far by height.
 const TABLE = {
   nearY: 1140, // bottom (near the bartender) — the launch/rest position
-  farY: 334, // top (where the planks meet the counter) — measured from the background art
+  farY: 334, // top (where the planks meet the counter)
   nearHalf: 355, // half-width at the bottom (planks reach near the screen edges)
   farHalf: 170, // half-width at the counter
   nearScale: 0.36,
   farScale: 0.15,
 };
 
-// Flick + glide feel. Launch requires a genuine upward flick; distance scales with how hard you flick
-// (skill). Below the threshold the shot resets to the bottom instead of launching. Flick speed is
-// measured by us in px/sec (Phaser's pointer.velocity is unit-unreliable across devices).
+// Flick + glide feel. Launch requires a genuine upward flick; distance scales with how hard you flick.
+// Below the threshold the shot resets to the bottom. Flick speed is measured by us in px/sec.
 const FLICK = {
   window: 120, // ms of recent motion used to measure the flick speed
   minSpeed: 400, // measured release speed (px/sec) below which it's NOT a flick → reset to origin
   boost: 0.4, // multiplies the measured flick velocity into launch velocity
   maxSpeed: 1250, // hard cap (px/sec)
   friction: 0.98, // per-60fps-frame glide decay — higher glides farther
-  settleSpeed: 12, // below this an in-flight shot is considered stopped
+  settleSpeed: 12, // below this a drink is considered stopped
   launchRange: 260, // you can wind up/aim only this far up from the bottom
-  restCap: 14, // keep at most this many settled drinks on the bar (memory bound)
+  restitution: 0.6, // bounciness when two different drinks collide (0=dead, 1=perfectly elastic)
+  radius: 0.42, // collision radius as a fraction of a drink's displayed width
 };
 
-interface Flying {
+interface Puck {
   img: Phaser.GameObjects.Image;
+  tier: number;
   vx: number;
   vy: number;
 }
@@ -52,14 +59,13 @@ interface Sample {
 }
 
 class BarScene extends Phaser.Scene {
-  private shot!: Phaser.GameObjects.Image; // the current grabbable shot resting at the bottom
+  private shot!: Phaser.GameObjects.Image; // the current grabbable shot resting at the bottom (tier 0)
   private hint?: Phaser.GameObjects.Text;
   private dragging = false;
   private grabDX = 0;
   private grabDY = 0;
   private resetTween?: Phaser.Tweens.Tween;
-  private flying: Flying[] = []; // shots currently gliding up the bar
-  private rested: Phaser.GameObjects.Image[] = []; // shots that have come to rest (persist)
+  private pucks: Puck[] = []; // every launched drink on the table (moving or at rest)
   private samples: Sample[] = []; // recent pointer positions, for measuring the flick
 
   constructor() {
@@ -69,15 +75,16 @@ class BarScene extends Phaser.Scene {
   preload() {
     this.load.image("bg", bgUrl);
     this.load.image("shot", shotUrl);
+    this.load.image("second", secondUrl);
   }
 
   create() {
     this.add.image(DESIGN_W / 2, DESIGN_H / 2, "bg").setDisplaySize(DESIGN_W, DESIGN_H).setDepth(0);
 
     this.hint = this.add
-      .text(CENTER_X, DESIGN_H * 0.6, "flick the shot up the bar", {
+      .text(CENTER_X, DESIGN_H * 0.6, "flick matching drinks together", {
         fontFamily: "system-ui, -apple-system, sans-serif",
-        fontSize: "34px",
+        fontSize: "32px",
         color: "#fff8e7",
         stroke: "#3a2410",
         strokeThickness: 6,
@@ -87,7 +94,7 @@ class BarScene extends Phaser.Scene {
       .setAlpha(0);
     this.tweens.add({ targets: this.hint, alpha: 0.9, duration: 500 });
 
-    this.shot = this.spawnShot();
+    this.shot = this.spawnDrink(0, CENTER_X, TABLE.nearY);
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onDown(p));
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => this.onMove(p));
@@ -95,9 +102,8 @@ class BarScene extends Phaser.Scene {
     this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => this.onUp(p));
   }
 
-  // A fresh shot always waits at the bottom launch spot.
-  private spawnShot() {
-    const s = this.add.image(CENTER_X, TABLE.nearY, "shot").setOrigin(0.5, 0.82);
+  private spawnDrink(tier: number, x: number, y: number) {
+    const s = this.add.image(x, y, TIER_TEX[tier]).setOrigin(0.5, 0.82);
     this.applyPerspective(s);
     return s;
   }
@@ -141,6 +147,10 @@ class BarScene extends Phaser.Scene {
     const hw = Phaser.Math.Linear(TABLE.nearHalf, TABLE.farHalf, this.progressAt(cy));
     const cx = Phaser.Math.Clamp(x, CENTER_X - hw, CENTER_X + hw);
     return { x: cx, y: cy };
+  }
+
+  private radius(p: Puck) {
+    return p.img.displayWidth * FLICK.radius;
   }
 
   private onDown(p: Phaser.Input.Pointer) {
@@ -193,9 +203,9 @@ class BarScene extends Phaser.Scene {
       lvx *= k;
       lvy *= k;
     }
-    this.flying.push({ img: this.shot, vx: lvx, vy: lvy });
+    this.pucks.push({ img: this.shot, tier: 0, vx: lvx, vy: lvy });
     // A new shot is immediately ready at the bottom.
-    this.shot = this.spawnShot();
+    this.shot = this.spawnDrink(0, CENTER_X, TABLE.nearY);
   }
 
   // Snap the shot back to the bottom launch spot (used when the release wasn't a flick).
@@ -215,32 +225,96 @@ class BarScene extends Phaser.Scene {
   }
 
   update(_t: number, dt: number) {
-    if (this.flying.length === 0) return;
     const step = dt / 1000;
     const friction = Math.pow(FLICK.friction, dt / 16.67);
 
-    for (let i = this.flying.length - 1; i >= 0; i--) {
-      const f = this.flying[i];
-      const nx = f.img.x + f.vx * step;
-      const ny = f.img.y + f.vy * step;
-      const c = this.clampToTable(nx, ny);
-      if (c.x !== nx) f.vx = 0; // hit a side rail
-      if (c.y !== ny) f.vy = 0; // reached the far counter
-      f.img.x = c.x;
-      f.img.y = c.y;
-      this.applyPerspective(f.img);
-      f.vx *= friction;
-      f.vy *= friction;
+    // Move each drink, glide with friction, clamp to the table.
+    for (const p of this.pucks) {
+      if (Math.hypot(p.vx, p.vy) >= FLICK.settleSpeed) {
+        const nx = p.img.x + p.vx * step;
+        const ny = p.img.y + p.vy * step;
+        const c = this.clampToTable(nx, ny);
+        if (c.x !== nx) p.vx = 0; // hit a side rail
+        if (c.y !== ny) p.vy = 0; // reached the far counter
+        p.img.x = c.x;
+        p.img.y = c.y;
+        p.vx *= friction;
+        p.vy *= friction;
+      } else {
+        p.vx = 0;
+        p.vy = 0;
+      }
+      this.applyPerspective(p.img);
+    }
 
-      if (Math.hypot(f.vx, f.vy) < FLICK.settleSpeed) {
-        // Settled — it stays on the bar as a resting drink.
-        this.rested.push(f.img);
-        this.flying.splice(i, 1);
-        if (this.rested.length > FLICK.restCap) {
-          this.rested.shift()?.destroy();
+    this.resolveCollisions();
+
+    while (this.pucks.length > PUCK_CAP) this.pucks.shift()?.img.destroy();
+  }
+
+  private resolveCollisions() {
+    const n = this.pucks.length;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = this.pucks[i];
+        const b = this.pucks[j];
+        const dx = b.img.x - a.img.x;
+        const dy = b.img.y - a.img.y;
+        let dist = Math.hypot(dx, dy);
+        if (dist === 0) dist = 0.001;
+        const rr = this.radius(a) + this.radius(b);
+        if (dist >= rr) continue;
+
+        if (a.tier === b.tier && a.tier < MAX_TIER) {
+          this.merge(i, j); // same kind → combine; array changes, bail and finish next frame
+          return;
         }
+        this.bounce(a, b, dx, dy, dist, rr); // different kinds (or top tier) → bounce apart
       }
     }
+  }
+
+  private bounce(a: Puck, b: Puck, dx: number, dy: number, dist: number, rr: number) {
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const overlap = rr - dist;
+    // separate the two so they don't stay stuck inside each other
+    let ca = this.clampToTable(a.img.x - (nx * overlap) / 2, a.img.y - (ny * overlap) / 2);
+    let cb = this.clampToTable(b.img.x + (nx * overlap) / 2, b.img.y + (ny * overlap) / 2);
+    a.img.x = ca.x;
+    a.img.y = ca.y;
+    b.img.x = cb.x;
+    b.img.y = cb.y;
+    // exchange the velocity component along the collision normal (equal-mass elastic + restitution)
+    const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+    if (vn < 0) {
+      const imp = (-(1 + FLICK.restitution) * vn) / 2;
+      a.vx -= imp * nx;
+      a.vy -= imp * ny;
+      b.vx += imp * nx;
+      b.vy += imp * ny;
+    }
+    this.applyPerspective(a.img);
+    this.applyPerspective(b.img);
+  }
+
+  private merge(i: number, j: number) {
+    const a = this.pucks[i];
+    const b = this.pucks[j];
+    const mx = (a.img.x + b.img.x) / 2;
+    const my = (a.img.y + b.img.y) / 2;
+    const tier = a.tier + 1;
+    const vx = (a.vx + b.vx) * 0.2;
+    const vy = (a.vy + b.vy) * 0.2;
+    a.img.destroy();
+    b.img.destroy();
+    this.pucks.splice(j, 1); // remove higher index first
+    this.pucks.splice(i, 1);
+    const img = this.spawnDrink(tier, mx, my);
+    this.pucks.push({ img, tier, vx, vy });
+    // quick flash so the combine reads (alpha isn't touched by the perspective update)
+    img.setAlpha(0.3);
+    this.tweens.add({ targets: img, alpha: 1, duration: 220, ease: "Quad.out" });
   }
 }
 
