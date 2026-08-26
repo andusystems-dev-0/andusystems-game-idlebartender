@@ -5,6 +5,7 @@ import bgUrl from "./assets/background.jpg";
 import drink1Url from "./assets/drink1.png";
 import drink2Url from "./assets/drink2.png";
 import drink3Url from "./assets/drink3.png";
+import drink4Url from "./assets/drink4.png";
 
 // Idle Bartender — iteration 2. A full shot always waits at the bartender's end. You FLICK it up the bar
 // and it glides to rest. When two drinks of the SAME kind touch they combine into the next drink in the
@@ -17,7 +18,7 @@ const CENTER_X = DESIGN_W * 0.5;
 
 // The drink sequence — each tier's texture. Index 0 is what you flick; touching two of a tier upgrades
 // to the next. The last tier can't upgrade further (two of them just bounce).
-const TIER_TEX = ["drink1", "drink2", "drink3"];
+const TIER_TEX = ["drink1", "drink2", "drink3", "drink4"];
 const MAX_TIER = TIER_TEX.length - 1;
 const PUCK_CAP = 16; // safety bound on drinks on the table
 // Each drink you flick is a random tier: tier 0 is most common and every higher tier is only this
@@ -87,6 +88,7 @@ class BarScene extends Phaser.Scene {
     this.load.image("drink1", drink1Url);
     this.load.image("drink2", drink2Url);
     this.load.image("drink3", drink3Url);
+    this.load.image("drink4", drink4Url);
   }
 
   create() {
