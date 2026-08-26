@@ -13,8 +13,10 @@ you build — web hosting *and* the store apps come from that one artifact (D-01
   `com.andusystems.games.<slug>`, icon/splash (a SpriteForge asset), orientation.
 - `.env.uat` / `.env.prod` — API base + `gameId` per env.
 - Save-lifecycle wiring (web `visibilitychange`/`pagehide` + Capacitor `App` pause) → SDK flush.
-- CI that builds the web bundle once and: publishes UAT (R2 `uat/` behind Pangolin) → prod (R2
-  `prod/` on Cloudflare), and calls the shared `mobile-package.yml` for the stores.
+- Deployment: this game is hosted on the **games k3s cluster** (private nginx image → Forgejo →
+  ArgoCD), with **Cloudflare as DNS/CDN only** (not Cloudflare Pages). GitHub Actions `image.yml`
+  builds the image; ArgoCD deploys it. See **[`docs/DEPLOY.md`](docs/DEPLOY.md)** for the flow and how
+  to ship a new version. (The template's original R2/Pages CI has been replaced.)
 
 ## You do NOT write
 Native/mobile code (the store wrapper is the generic shell in `andusystems-games/mobile/shell`),
