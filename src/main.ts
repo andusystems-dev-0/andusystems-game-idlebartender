@@ -8,9 +8,12 @@ import bgUrl from "./assets/background.jpg";
 // Load the save (and grant offline earnings) before the game boots.
 G.load();
 
-// Paint the beach behind the canvas too, so any sliver the canvas doesn't cover shows the bar
-// continuing (never a black/blank bar).
-document.body.style.background = `#c76914 url(${bgUrl}) center / cover no-repeat`;
+// Paint the bar art behind everything — on the ROOT element, whose background fills the ENTIRE viewport
+// including the iOS home-indicator safe area that the canvas can't reach. Bottom-aligned so the strip
+// shows the table continuing (not a flat color bar). Applied to <html> and <body>.
+const pageBg = `#c76914 url(${bgUrl}) center bottom / cover no-repeat`;
+document.documentElement.style.background = pageBg;
+document.body.style.background = pageBg;
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
