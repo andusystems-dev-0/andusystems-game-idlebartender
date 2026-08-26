@@ -45,14 +45,9 @@ window.addEventListener("pagehide", flush);
 window.addEventListener("beforeunload", flush);
 
 // ── Viewport: fill the screen in both mobile browser and the home-screen app ──
-const supportsDvh = typeof CSS !== "undefined" && !!CSS.supports && CSS.supports("height", "100dvh");
 const isStandalone = () =>
-  (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
   (navigator as unknown as { standalone?: boolean }).standalone === true ||
-  // heuristic fallback: a portrait view that already fills the device height is running chrome-less
-  (window.innerWidth < window.innerHeight &&
-    typeof screen !== "undefined" &&
-    window.innerHeight >= (screen.height || 0) * 0.92);
+  (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
 
 // Read a CSS env(safe-area-inset-*) value in CSS pixels (Dynamic Island / notch / home indicator).
 const cssInset = (name: "top" | "bottom"): number => {
@@ -67,14 +62,23 @@ const cssInset = (name: "top" | "bottom"): number => {
 const fitViewport = () => {
   const el = document.getElementById("game");
   if (el) {
-    // Size to the real visible viewport. In the browser that's innerHeight (clear of the toolbar); in
-    // the home-screen app force at least the full device height so there's never a bottom gap. ENVELOP
-    // then covers this exactly (cropping the sides on tall/thin phones), so the art spans the screen.
-    let h = window.innerHeight;
-    if (isStandalone() && typeof screen !== "undefined" && screen.height) h = Math.max(h, screen.height);
-    el.style.top = "0";
-    el.style.left = "0";
-    el.style.height = `${Math.round(h)}px`;
+    if (isStandalone()) {
+      // Home-screen app: fill the ENTIRE screen (including behind the home indicator). Pin all four
+      // edges and clear any inline height — do NOT set a pixel height, which was coming up short of the
+      // physical screen and leaving a bottom border. ENVELOP then covers this, cropping the sides.
+      el.style.height = "";
+      el.style.top = "0";
+      el.style.right = "0";
+      el.style.bottom = "0";
+      el.style.left = "0";
+    } else {
+      // Browser: size to the visible viewport (clear of Safari's toolbar) so the drink isn't hidden.
+      el.style.right = "";
+      el.style.bottom = "";
+      el.style.top = "0";
+      el.style.left = "0";
+      el.style.height = `${Math.round(window.innerHeight)}px`;
+    }
   }
   // expose safe-area insets to the game in design-space pixels so the HUD can dodge the notch/island
   const factor = DESIGN.h / Math.max(1, window.innerHeight);
@@ -82,7 +86,6 @@ const fitViewport = () => {
   G.T.safeBottom = cssInset("bottom") * factor;
   if (game.scale) game.scale.refresh();
 };
-void supportsDvh; // (CSS 100dvh is the pre-JS fallback; JS sizing above is authoritative)
 game.events.once("ready", fitViewport);
 window.addEventListener("resize", fitViewport);
 window.addEventListener("load", fitViewport);

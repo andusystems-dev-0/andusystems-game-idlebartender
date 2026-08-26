@@ -86,6 +86,7 @@
         pointer-events: auto;
       }
 
+      /* top stats row (coins / score / tokens), over the bottle shelf above the table */
       #hud {
         position: absolute;
         top: calc(env(safe-area-inset-top) + 6px);
@@ -93,9 +94,9 @@
         right: 0;
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
-        gap: 8px;
-        padding: 0 max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+        align-items: center;
+        gap: 6px;
+        padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
       }
       .chip {
         background: var(--glass);

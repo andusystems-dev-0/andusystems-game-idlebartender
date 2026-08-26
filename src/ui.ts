@@ -57,6 +57,14 @@ export function initUI() {
   toastEl = el("div", { id: "toast" });
   ui.append(modalRoot, toastEl);
 
+  // Stop UI pointer events from bubbling to window, where Phaser's input listeners would otherwise see
+  // them and wedge its pointer state (a "down" on a UI control with no matching "up" on the canvas) —
+  // which was breaking flicking after opening/closing a menu. Canvas events go through #game, not #ui,
+  // so flicks are unaffected.
+  ["pointerdown", "pointerup", "pointermove", "touchstart", "touchend", "mousedown", "mouseup"].forEach((ev) =>
+    ui.addEventListener(ev, (e) => e.stopPropagation()),
+  );
+
   if (G.T.offlineEarned > 0) showWelcomeBanner(ui);
 
   requestAnimationFrame(loop);
@@ -129,6 +137,7 @@ function closeModal() {
   currentBackdrop?.remove();
   currentBackdrop = null;
   G.T.modalOpen = false;
+  G.bus.emit("uiClosed"); // let the scene clear any stray drag state
 }
 
 function toast(msg: string) {

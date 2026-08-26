@@ -95,7 +95,16 @@ export class BarScene extends Phaser.Scene {
     // clear the table when the run resets
     const onPrestige = () => this.clearTable();
     G.bus.on("prestige", onPrestige);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => G.bus.off("prestige", onPrestige));
+    // when a menu closes, drop any stray drag so the next flick starts clean
+    const onUiClosed = () => {
+      this.dragging = false;
+      this.samples = [];
+    };
+    G.bus.on("uiClosed", onUiClosed);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      G.bus.off("prestige", onPrestige);
+      G.bus.off("uiClosed", onUiClosed);
+    });
   }
 
   // ── placeholder + particle textures ────────────────────────────────────────
