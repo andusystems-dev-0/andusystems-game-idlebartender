@@ -21,6 +21,16 @@ const TABLE = {
   farScale: 0.15,
 };
 
+// Release behaviour: on let-go the shot glides down the bar and settles (clamped to the far/counter
+// end so it stops "at the end of the bar"), but its reach is CAPPED so landing it stays a skill —
+// you can't just fling it hard and always reach the end.
+const SLIDE = {
+  boost: 1.15, // multiply the flick velocity a touch so a release carries down the bar
+  maxSpeed: 1900, // cap px/sec — the "don't slide too far" limit (lower = harder to reach the end)
+  friction: 0.95, // per-60fps-frame decay — higher glides further, lower stops sooner
+  minSpeed: 6, // below this it's considered stopped
+};
+
 class BarScene extends Phaser.Scene {
   private shot!: Phaser.GameObjects.Image;
   private hint?: Phaser.GameObjects.Text;
@@ -110,13 +120,23 @@ class BarScene extends Phaser.Scene {
   private onUp(p: Phaser.Input.Pointer) {
     if (!this.dragging) return;
     this.dragging = false;
-    this.vx = Phaser.Math.Clamp(p.velocity.x, -2600, 2600);
-    this.vy = Phaser.Math.Clamp(p.velocity.y, -2600, 2600);
+    // launch with the flick, boosted a touch, then cap the reach so aiming stays a skill.
+    let vx = p.velocity.x * SLIDE.boost;
+    let vy = p.velocity.y * SLIDE.boost;
+    const speed = Math.hypot(vx, vy);
+    if (speed > SLIDE.maxSpeed) {
+      const k = SLIDE.maxSpeed / speed;
+      vx *= k;
+      vy *= k;
+    }
+    this.vx = vx;
+    this.vy = vy;
   }
 
-  // Flick glide with friction, clamped to the table (stops at edges). Shot persists — never removed.
+  // Flick glide with friction, clamped to the table — settles at the far/counter end (or a rail),
+  // then rests there. The shot persists — never removed.
   update(_t: number, dt: number) {
-    if (this.dragging || (Math.abs(this.vx) < 4 && Math.abs(this.vy) < 4)) {
+    if (this.dragging || Math.hypot(this.vx, this.vy) < SLIDE.minSpeed) {
       this.vx = 0;
       this.vy = 0;
       return;
@@ -130,7 +150,7 @@ class BarScene extends Phaser.Scene {
     this.shot.x = c.x;
     this.shot.y = c.y;
     this.applyPerspective();
-    const friction = Math.pow(0.9, dt / 16.67);
+    const friction = Math.pow(SLIDE.friction, dt / 16.67);
     this.vx *= friction;
     this.vy *= friction;
   }
