@@ -57,9 +57,21 @@ export function initUI() {
   toastEl = el("div", { id: "toast" });
   ui.append(modalRoot, toastEl);
 
-  if (G.T.offlineEarned > 0) openWelcome();
+  if (G.T.offlineEarned > 0) showWelcomeBanner(ui);
 
   requestAnimationFrame(loop);
+}
+
+// Non-blocking welcome-back banner (does NOT set modalOpen, so it never blocks flicking).
+function showWelcomeBanner(ui: HTMLElement) {
+  const b = el(
+    "div",
+    { class: "banner", html: `Welcome back — earned <b>💰 ${fmt(G.T.offlineEarned)}</b> in ${fmtDuration(G.T.offlineSeconds)}` },
+  );
+  b.addEventListener("pointerup", () => b.remove());
+  ui.append(b);
+  setTimeout(() => b.remove(), 7000);
+  G.T.offlineEarned = 0;
 }
 
 function loop() {
@@ -231,16 +243,3 @@ function openDraft() {
   );
 }
 
-function openWelcome() {
-  openModal(
-    (card) => {
-      card.append(el("h2", {}, "Welcome Back"));
-      card.append(
-        el("div", { class: "center-msg", html: `Your bar ran for <b>${fmtDuration(G.T.offlineSeconds)}</b><br>and earned <b>💰 ${fmt(G.T.offlineEarned)}</b>` }),
-      );
-      card.append(el("button", { class: "btn green big", onclick: closeModal }, "Cheers!"));
-      G.T.offlineEarned = 0;
-    },
-    { closeButton: false },
-  );
-}

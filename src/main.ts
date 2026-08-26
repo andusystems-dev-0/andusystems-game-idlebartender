@@ -62,18 +62,14 @@ const cssInset = (name: "top" | "bottom"): number => {
 const fitViewport = () => {
   const el = document.getElementById("game");
   if (el) {
-    if (isStandalone()) {
-      // Home-screen app: 100dvh can report short of the real screen on iOS (a bottom bar). Pin all edges.
-      el.style.height = "auto";
-      el.style.top = "0";
-      el.style.right = "0";
-      el.style.bottom = "0";
-      el.style.left = "0";
-    } else if (supportsDvh) {
-      el.style.removeProperty("height"); // CSS 100dvh tracks the visible (toolbar-aware) viewport
-    } else {
-      el.style.height = `${window.innerHeight}px`;
-    }
+    // Size to the real visible viewport. In the browser that's innerHeight (clear of the toolbar); in
+    // the home-screen app force at least the full device height so there's never a bottom gap. ENVELOP
+    // then covers this exactly (cropping the sides on tall/thin phones), so the art spans the screen.
+    let h = window.innerHeight;
+    if (isStandalone() && typeof screen !== "undefined" && screen.height) h = Math.max(h, screen.height);
+    el.style.top = "0";
+    el.style.left = "0";
+    el.style.height = `${Math.round(h)}px`;
   }
   // expose safe-area insets to the game in design-space pixels so the HUD can dodge the notch/island
   const factor = DESIGN.h / Math.max(1, window.innerHeight);
@@ -81,8 +77,12 @@ const fitViewport = () => {
   G.T.safeBottom = cssInset("bottom") * factor;
   if (game.scale) game.scale.refresh();
 };
+void supportsDvh; // (CSS 100dvh is the pre-JS fallback; JS sizing above is authoritative)
 game.events.once("ready", fitViewport);
 window.addEventListener("resize", fitViewport);
-window.addEventListener("orientationchange", () => window.setTimeout(fitViewport, 200));
+window.addEventListener("load", fitViewport);
+window.addEventListener("orientationchange", () => window.setTimeout(fitViewport, 250));
 if (window.matchMedia) window.matchMedia("(display-mode: standalone)").addEventListener?.("change", fitViewport);
+// iOS settles the viewport after first paint — re-fit a few times.
+[80, 250, 600, 1200].forEach((ms) => window.setTimeout(fitViewport, ms));
 fitViewport();
