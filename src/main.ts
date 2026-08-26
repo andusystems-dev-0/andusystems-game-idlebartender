@@ -44,11 +44,7 @@ window.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", flush);
 window.addEventListener("beforeunload", flush);
 
-// ── Viewport: fill the screen in both mobile browser and the home-screen app ──
-const isStandalone = () =>
-  (navigator as unknown as { standalone?: boolean }).standalone === true ||
-  (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-
+// ── Viewport ─────────────────────────────────────────────────────────────────
 // Read a CSS env(safe-area-inset-*) value in CSS pixels (Dynamic Island / notch / home indicator).
 const cssInset = (name: "top" | "bottom"): number => {
   const d = document.createElement("div");
@@ -62,23 +58,16 @@ const cssInset = (name: "top" | "bottom"): number => {
 const fitViewport = () => {
   const el = document.getElementById("game");
   if (el) {
-    if (isStandalone()) {
-      // Home-screen app: fill the ENTIRE screen (including behind the home indicator). Pin all four
-      // edges and clear any inline height — do NOT set a pixel height, which was coming up short of the
-      // physical screen and leaving a bottom border. ENVELOP then covers this, cropping the sides.
-      el.style.height = "";
-      el.style.top = "0";
-      el.style.right = "0";
-      el.style.bottom = "0";
-      el.style.left = "0";
-    } else {
-      // Browser: size to the visible viewport (clear of Safari's toolbar) so the drink isn't hidden.
-      el.style.right = "";
-      el.style.bottom = "";
-      el.style.top = "0";
-      el.style.left = "0";
-      el.style.height = `${Math.round(window.innerHeight)}px`;
-    }
+    // OVER-COVER: make the container a bit TALLER than the visible viewport so ENVELOP (cover) always
+    // reaches the physical bottom — this defeats the iOS home-indicator gap and any short viewport
+    // report, detection-free. The extra height is just empty deck below the drink, cropped off-screen;
+    // the play area still fits vertically. Top-anchored so the drink/table stay put; width is cropped.
+    const pad = Math.max(56, cssInset("bottom") + 20);
+    el.style.top = "0";
+    el.style.left = "0";
+    el.style.right = "";
+    el.style.bottom = "";
+    el.style.height = `${Math.round(window.innerHeight + pad)}px`;
   }
   // expose safe-area insets to the game in design-space pixels so the HUD can dodge the notch/island
   const factor = DESIGN.h / Math.max(1, window.innerHeight);
