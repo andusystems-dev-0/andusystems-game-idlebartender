@@ -1,0 +1,47 @@
+# Build the game into a private nginx image and push to the PRIVATE Forgejo registry (what the games
+# cluster's apps/game-idlebartender pulls). GitHub Actions on the self-hosted runner (has the VM docker
+# socket + trusts the self-signed Forgejo). No public registries — the Dockerfile bases are Forgejo
+# mirrors. Matches andusystems-{games-save-api,spriteforge}/.github/workflows/image.yml.
+#
+# Requires GH secrets FORGEJO_USER + FORGEJO_TOKEN (bot with package:write on andusystems/*).
+name: image
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "tsconfig.json"
+      - "Dockerfile"
+      - "nginx.conf"
+      - ".github/workflows/image.yml"
+
+permissions:
+  contents: read
+
+env:
+  REG: forgejo.andusystems.com
+  IMAGE: forgejo.andusystems.com/andusystems/game-idlebartender
+
+jobs:
+  build-push:
+    runs-on: [self-hosted, linux, andusystems-mgmt]
+    steps:
+      - uses: actions/checkout@v4
+      - name: build + push (docker → private Forgejo)
+        env:
+          FORGEJO_USER: ${{ secrets.FORGEJO_USER }}
+          FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${FORGEJO_USER:-}" ] && [ -n "${FORGEJO_TOKEN:-}" ] || { echo "::error::FORGEJO_USER/FORGEJO_TOKEN not set"; exit 1; }
+          echo "$FORGEJO_TOKEN" | docker login "$REG" -u "$FORGEJO_USER" --password-stdin
+          docker build --pull -t "$IMAGE:latest" -t "$IMAGE:${{ github.sha }}" .
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
