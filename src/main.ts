@@ -25,10 +25,13 @@ const TABLE = {
 // end so it stops "at the end of the bar"), but its reach is CAPPED so landing it stays a skill —
 // you can't just fling it hard and always reach the end.
 const SLIDE = {
-  boost: 1.15, // multiply the flick velocity a touch so a release carries down the bar
-  maxSpeed: 1900, // cap px/sec — the "don't slide too far" limit (lower = harder to reach the end)
-  friction: 0.95, // per-60fps-frame decay — higher glides further, lower stops sooner
+  boost: 1.8, // multiply the flick velocity so a release carries well down the bar
+  maxSpeed: 3500, // cap px/sec (the far-edge clamp is the real stop, so this just bounds launch speed)
+  friction: 0.966, // per-60fps-frame decay — higher glides further, lower stops sooner
   minSpeed: 6, // below this it's considered stopped
+  // You only control the shot in a launch zone near the bottom — you aim + flick from here, then it
+  // slides up on its own (no steering it up the table).
+  launchRange: 240, // how far up from the near edge you can drag it before releasing
 };
 
 class BarScene extends Phaser.Scene {
@@ -111,7 +114,9 @@ class BarScene extends Phaser.Scene {
 
   private onMove(p: Phaser.Input.Pointer) {
     if (!this.dragging) return;
-    const { x, y } = this.clampToTable(p.x + this.grabDX, p.y + this.grabDY);
+    // aim + wind up only in the bottom launch zone — you can't steer it up the table.
+    const ty = Phaser.Math.Clamp(p.y + this.grabDY, TABLE.nearY - SLIDE.launchRange, TABLE.nearY);
+    const { x, y } = this.clampToTable(p.x + this.grabDX, ty);
     this.shot.x = x;
     this.shot.y = y;
     this.applyPerspective();
