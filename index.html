@@ -5,8 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <title>Idle Bartender</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #0b1e3f; overflow: hidden; }
-      #game { width: 100vw; height: 100vh; }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #0b1e3f;
+        overflow: hidden;
+      }
+      /* Pin to the *visible* viewport. On mobile Safari 100vh includes the area behind the toolbars,
+         which hid the bottom of the canvas (the drink); 100dvh (+ JS innerHeight fallback in main.ts)
+         tracks the actually-visible height. touch-action:none keeps flicks from scrolling the page. */
+      #game {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh; /* fallback for old browsers */
+        height: 100dvh; /* visible viewport on modern mobile */
+        overflow: hidden;
+        touch-action: none;
+      }
+      #game canvas {
+        display: block;
+      }
     </style>
   </head>
   <body>

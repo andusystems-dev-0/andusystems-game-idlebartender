@@ -346,7 +346,7 @@ class BarScene extends Phaser.Scene {
   }
 }
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
   backgroundColor: "#0b1e3f",
@@ -358,3 +358,16 @@ new Phaser.Game({
   },
   scene: [BarScene],
 });
+
+// Mobile browsers (esp. iOS Safari) report 100vh as the *large* viewport that extends behind the
+// toolbars, so the bottom of the canvas — and the drink resting there — was pushed out of view. Pin the
+// container to the actual visible height and re-fit Phaser whenever it changes (toolbar show/hide, rotate).
+const fitViewport = () => {
+  const el = document.getElementById("game");
+  if (el) el.style.height = `${window.innerHeight}px`;
+  if (game.scale) game.scale.refresh();
+};
+game.events.once("ready", fitViewport);
+window.addEventListener("resize", fitViewport);
+window.addEventListener("orientationchange", () => window.setTimeout(fitViewport, 150));
+fitViewport();
