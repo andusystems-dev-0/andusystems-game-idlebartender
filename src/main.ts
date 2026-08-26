@@ -4,9 +4,10 @@ import Phaser from "phaser";
 import bgUrl from "./assets/background.jpg";
 import shotUrl from "./assets/shot.png";
 
-// Idle Bartender — iteration 1. A shot rests at the bartender's end; you aim + flick it from a launch
-// zone near the bottom, then let go — it LAUNCHES up the bar and glides to a stop at the far/counter
-// end. You only steer it at the bottom; once released, physics carries it. The shot persists.
+// Idle Bartender — iteration 1. A full shot always waits at the bartender's end. You grab it and must
+// FLICK it up the bar: a real flick launches it and it glides to rest up the counter (and stays there);
+// a weak/slow release just resets it back to the bottom. A fresh shot appears at the bottom after each
+// flick, so there's always one ready.
 //
 // Design canvas matches the background art (720x1280, portrait). Scale.ENVELOP fills the whole screen.
 const DESIGN_W = 720;
@@ -16,7 +17,7 @@ const CENTER_X = DESIGN_W * 0.5;
 // The playable wooden table is a perspective trapezoid: wide at the near/bottom edge, narrow at the far
 // counter end. Shot scale interpolates near→far by height.
 const TABLE = {
-  nearY: 1185, // bottom (near the bartender)
+  nearY: 1185, // bottom (near the bartender) — the launch/rest position
   farY: 430, // top (at the counter)
   nearHalf: 330, // half-width at the bottom
   farHalf: 150, // half-width at the counter
@@ -24,25 +25,33 @@ const TABLE = {
   farScale: 0.15,
 };
 
-// Release behaviour. On let-go the shot launches UP the bar with a strong, reliable speed (so even a
-// slow drag-and-release sends it), glides with low friction, and settles at the far end (clamped).
-const SLIDE = {
-  launchSpeed: 2600, // base upward launch speed (px/sec) — guarantees a fast slide toward the end
-  flickBoost: 1.4, // a hard flick adds extra power + lateral aim on top of the base launch
-  maxSpeed: 5200, // hard cap (px/sec)
-  friction: 0.985, // per-60fps-frame decay — higher glides further; lower stops sooner
-  minSpeed: 8, // below this it's considered stopped
-  launchRange: 240, // you can aim/wind up only this far up from the near edge
+// Flick + glide feel. Launch requires a genuine upward flick; distance scales with how hard you flick
+// (skill). Below the threshold the shot resets to the bottom instead of launching.
+const FLICK = {
+  minSpeed: 320, // release speed (px/sec) below which it's NOT a flick → reset to origin
+  boost: 2.2, // multiplies the flick velocity into launch velocity
+  maxSpeed: 5000, // hard cap (px/sec)
+  friction: 0.98, // per-60fps-frame glide decay — higher glides farther
+  settleSpeed: 12, // below this an in-flight shot is considered stopped
+  launchRange: 260, // you can wind up/aim only this far up from the bottom
+  restCap: 14, // keep at most this many settled drinks on the bar (memory bound)
 };
 
+interface Flying {
+  img: Phaser.GameObjects.Image;
+  vx: number;
+  vy: number;
+}
+
 class BarScene extends Phaser.Scene {
-  private shot!: Phaser.GameObjects.Image;
+  private shot!: Phaser.GameObjects.Image; // the current grabbable shot resting at the bottom
   private hint?: Phaser.GameObjects.Text;
   private dragging = false;
   private grabDX = 0;
   private grabDY = 0;
-  private vx = 0;
-  private vy = 0;
+  private resetTween?: Phaser.Tweens.Tween;
+  private flying: Flying[] = []; // shots currently gliding up the bar
+  private rested: Phaser.GameObjects.Image[] = []; // shots that have come to rest (persist)
 
   constructor() {
     super("bar");
@@ -69,8 +78,7 @@ class BarScene extends Phaser.Scene {
       .setAlpha(0);
     this.tweens.add({ targets: this.hint, alpha: 0.9, duration: 500 });
 
-    this.shot = this.add.image(CENTER_X, TABLE.nearY, "shot").setOrigin(0.5, 0.82);
-    this.applyPerspective();
+    this.shot = this.spawnShot();
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onDown(p));
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => this.onMove(p));
@@ -78,14 +86,21 @@ class BarScene extends Phaser.Scene {
     this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => this.onUp(p));
   }
 
+  // A fresh shot always waits at the bottom launch spot.
+  private spawnShot() {
+    const s = this.add.image(CENTER_X, TABLE.nearY, "shot").setOrigin(0.5, 0.82);
+    this.applyPerspective(s);
+    return s;
+  }
+
   private progressAt(y: number) {
     return Phaser.Math.Clamp((TABLE.nearY - y) / (TABLE.nearY - TABLE.farY), 0, 1);
   }
 
-  private applyPerspective() {
-    const t = this.progressAt(this.shot.y);
-    this.shot.setScale(Phaser.Math.Linear(TABLE.nearScale, TABLE.farScale, t));
-    this.shot.setDepth(this.shot.y);
+  private applyPerspective(img: Phaser.GameObjects.Image) {
+    const t = this.progressAt(img.y);
+    img.setScale(Phaser.Math.Linear(TABLE.nearScale, TABLE.farScale, t));
+    img.setDepth(img.y); // nearer (larger y) draws in front
   }
 
   private clampToTable(x: number, y: number) {
@@ -98,9 +113,9 @@ class BarScene extends Phaser.Scene {
   private onDown(p: Phaser.Input.Pointer) {
     const grabR = Math.max(this.shot.displayWidth, this.shot.displayHeight) * 0.75 + 60;
     if (Phaser.Math.Distance.Between(p.x, p.y, this.shot.x, this.shot.y) > grabR) return;
+    this.resetTween?.stop();
+    this.resetTween = undefined;
     this.dragging = true;
-    this.vx = 0;
-    this.vy = 0;
     this.grabDX = this.shot.x - p.x;
     this.grabDY = this.shot.y - p.y;
     if (this.hint) {
@@ -111,49 +126,85 @@ class BarScene extends Phaser.Scene {
 
   private onMove(p: Phaser.Input.Pointer) {
     if (!this.dragging) return;
-    // aim + wind up only in the bottom launch zone — you can't steer it up the table.
-    const ty = Phaser.Math.Clamp(p.y + this.grabDY, TABLE.nearY - SLIDE.launchRange, TABLE.nearY);
+    // wind up/aim only in the bottom launch zone.
+    const ty = Phaser.Math.Clamp(p.y + this.grabDY, TABLE.nearY - FLICK.launchRange, TABLE.nearY);
     const { x, y } = this.clampToTable(p.x + this.grabDX, ty);
     this.shot.x = x;
     this.shot.y = y;
-    this.applyPerspective();
+    this.applyPerspective(this.shot);
   }
 
   private onUp(p: Phaser.Input.Pointer) {
     if (!this.dragging) return;
     this.dragging = false;
-    // Always launch strongly up the bar; a hard upward flick makes it faster; the flick's x adds aim.
-    let vx = p.velocity.x * SLIDE.flickBoost;
-    let vy = Math.min(-SLIDE.launchSpeed, p.velocity.y * SLIDE.flickBoost);
-    const speed = Math.hypot(vx, vy);
-    if (speed > SLIDE.maxSpeed) {
-      const k = SLIDE.maxSpeed / speed;
-      vx *= k;
-      vy *= k;
-    }
-    this.vx = vx;
-    this.vy = vy;
-  }
 
-  // Glide with friction, clamped to the table — settles at the far/counter end, then rests. Never removed.
-  update(_t: number, dt: number) {
-    if (this.dragging || Math.hypot(this.vx, this.vy) < SLIDE.minSpeed) {
-      this.vx = 0;
-      this.vy = 0;
+    const vx = p.velocity.x;
+    const vy = p.velocity.y;
+    const speed = Math.hypot(vx, vy);
+    const isFlick = vy < 0 && speed >= FLICK.minSpeed; // must be an upward flick, fast enough
+
+    if (!isFlick) {
+      this.resetShot(); // not a real flick → send it back to the bottom
       return;
     }
+
+    // Launch: velocity scales with flick strength (aim + power are the skill), capped.
+    let lvx = vx * FLICK.boost;
+    let lvy = vy * FLICK.boost;
+    const ls = Math.hypot(lvx, lvy);
+    if (ls > FLICK.maxSpeed) {
+      const k = FLICK.maxSpeed / ls;
+      lvx *= k;
+      lvy *= k;
+    }
+    this.flying.push({ img: this.shot, vx: lvx, vy: lvy });
+    // A new shot is immediately ready at the bottom.
+    this.shot = this.spawnShot();
+  }
+
+  // Glide the launched shot back to the bottom launch spot (used when the release wasn't a flick).
+  private resetShot() {
+    this.resetTween = this.tweens.add({
+      targets: this.shot,
+      x: CENTER_X,
+      y: TABLE.nearY,
+      duration: 220,
+      ease: "Back.out",
+      onUpdate: () => this.applyPerspective(this.shot),
+      onComplete: () => {
+        this.applyPerspective(this.shot);
+        this.resetTween = undefined;
+      },
+    });
+  }
+
+  update(_t: number, dt: number) {
+    if (this.flying.length === 0) return;
     const step = dt / 1000;
-    const nx = this.shot.x + this.vx * step;
-    const ny = this.shot.y + this.vy * step;
-    const c = this.clampToTable(nx, ny);
-    if (c.x !== nx) this.vx = 0;
-    if (c.y !== ny) this.vy = 0;
-    this.shot.x = c.x;
-    this.shot.y = c.y;
-    this.applyPerspective();
-    const friction = Math.pow(SLIDE.friction, dt / 16.67);
-    this.vx *= friction;
-    this.vy *= friction;
+    const friction = Math.pow(FLICK.friction, dt / 16.67);
+
+    for (let i = this.flying.length - 1; i >= 0; i--) {
+      const f = this.flying[i];
+      const nx = f.img.x + f.vx * step;
+      const ny = f.img.y + f.vy * step;
+      const c = this.clampToTable(nx, ny);
+      if (c.x !== nx) f.vx = 0; // hit a side rail
+      if (c.y !== ny) f.vy = 0; // reached the far counter
+      f.img.x = c.x;
+      f.img.y = c.y;
+      this.applyPerspective(f.img);
+      f.vx *= friction;
+      f.vy *= friction;
+
+      if (Math.hypot(f.vx, f.vy) < FLICK.settleSpeed) {
+        // Settled — it stays on the bar as a resting drink.
+        this.rested.push(f.img);
+        this.flying.splice(i, 1);
+        if (this.rested.length > FLICK.restCap) {
+          this.rested.shift()?.destroy();
+        }
+      }
+    }
   }
 }
 
