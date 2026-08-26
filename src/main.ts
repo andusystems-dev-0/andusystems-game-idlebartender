@@ -1,25 +1,34 @@
 import Phaser from "phaser";
 
-// Idle Bartender — iteration 1. A shot sits READY at the bartender's end (bottom); the player SWIPES it
-// up the tiki-bar table with their own gesture — nothing moves on its own. It shrinks with the table's
-// perspective as it travels; release far enough (or flick upward) to send it to the counter, otherwise
-// it glides back to the ready spot for another go.
+// Idle Bartender — iteration 1. A shot sits on the tiki-bar table; the player slides it FREELY around
+// the table with their gesture — drag it anywhere on the wooden surface, or flick it and it glides to a
+// stop. It shrinks/grows with the table's perspective as it moves toward/away from the counter, and it
+// STAYS wherever you leave it — nothing auto-moves and nothing disappears.
 //
-// Design canvas matches the background art (720x1280, portrait). Scale.ENVELOP covers the whole screen
-// on mobile (fills edge-to-edge, cropping any overflow) instead of letterboxing.
+// Design canvas matches the background art (720x1280, portrait). Scale.ENVELOP fills the whole screen.
 const DESIGN_W = 720;
 const DESIGN_H = 1280;
 const CENTER_X = DESIGN_W * 0.5;
 
-// Slide path down the receding bar table: NEAR = bartender's end (bottom, big) → FAR = counter (top, small).
-const NEAR = { y: 1185, scale: 0.36 };
-const FAR = { y: 430, scale: 0.15 };
+// The playable wooden table is a perspective trapezoid: wide at the near/bottom edge, narrowing to the
+// far/counter end. The shot may go anywhere inside it; scale interpolates near→far by height.
+const TABLE = {
+  nearY: 1185, // bottom (near the bartender)
+  farY: 430, // top (at the counter)
+  nearHalf: 330, // half-width of the table at the bottom
+  farHalf: 150, // half-width at the counter
+  nearScale: 0.36,
+  farScale: 0.15,
+};
 
 class BarScene extends Phaser.Scene {
-  private shot?: Phaser.GameObjects.Image;
+  private shot!: Phaser.GameObjects.Image;
   private hint?: Phaser.GameObjects.Text;
   private dragging = false;
-  private busy = false; // a shot is completing its slide / being re-served
+  private grabDX = 0; // pointer→shot offset so it doesn't jump on grab
+  private grabDY = 0;
+  private vx = 0; // flick momentum (px/sec)
+  private vy = 0;
 
   constructor() {
     super("bar");
@@ -34,9 +43,9 @@ class BarScene extends Phaser.Scene {
     this.add.image(DESIGN_W / 2, DESIGN_H / 2, "bg").setDisplaySize(DESIGN_W, DESIGN_H).setDepth(0);
 
     this.hint = this.add
-      .text(CENTER_X, DESIGN_H * 0.7, "swipe the shot up the bar", {
+      .text(CENTER_X, DESIGN_H * 0.62, "slide the shot around the bar", {
         fontFamily: "system-ui, -apple-system, sans-serif",
-        fontSize: "36px",
+        fontSize: "34px",
         color: "#fff8e7",
         stroke: "#3a2410",
         strokeThickness: 6,
@@ -46,7 +55,9 @@ class BarScene extends Phaser.Scene {
       .setAlpha(0);
     this.tweens.add({ targets: this.hint, alpha: 0.9, duration: 500 });
 
-    this.serveShot();
+    // One shot, resting near the bottom center — slide it wherever you like.
+    this.shot = this.add.image(CENTER_X, TABLE.nearY, "shot").setOrigin(0.5, 0.82);
+    this.applyPerspective();
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onDown(p));
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => this.onMove(p));
@@ -54,88 +65,74 @@ class BarScene extends Phaser.Scene {
     this.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => this.onUp(p));
   }
 
-  // A fresh shot waiting, static, at the bartender's end (bottom center).
-  private serveShot() {
-    this.shot = this.add.image(CENTER_X, NEAR.y, "shot").setOrigin(0.5, 0.82).setScale(NEAR.scale).setDepth(NEAR.y);
-    this.busy = false;
-  }
-
   // 0 at the near/bottom edge → 1 at the far/counter end.
   private progressAt(y: number) {
-    return Phaser.Math.Clamp((NEAR.y - y) / (NEAR.y - FAR.y), 0, 1);
+    return Phaser.Math.Clamp((TABLE.nearY - y) / (TABLE.nearY - TABLE.farY), 0, 1);
   }
 
-  // Place the shot along the perspective track for a pointer position (converging toward the vanishing point).
-  private track(x: number, y: number) {
-    if (!this.shot) return;
-    const t = this.progressAt(y);
-    this.shot.y = y;
-    this.shot.x = Phaser.Math.Linear(x, CENTER_X, t * t);
-    this.shot.setScale(Phaser.Math.Linear(NEAR.scale, FAR.scale, t));
-    this.shot.setDepth(y);
+  private applyPerspective() {
+    const t = this.progressAt(this.shot.y);
+    this.shot.setScale(Phaser.Math.Linear(TABLE.nearScale, TABLE.farScale, t));
+    this.shot.setDepth(this.shot.y); // nearer (lower) draws over farther
+  }
+
+  // Clamp a target position to the trapezoidal table surface.
+  private clampToTable(x: number, y: number) {
+    const cy = Phaser.Math.Clamp(y, TABLE.farY, TABLE.nearY);
+    const hw = Phaser.Math.Linear(TABLE.nearHalf, TABLE.farHalf, this.progressAt(cy));
+    const cx = Phaser.Math.Clamp(x, CENTER_X - hw, CENTER_X + hw);
+    return { x: cx, y: cy };
   }
 
   private onDown(p: Phaser.Input.Pointer) {
-    if (this.busy || !this.shot) return;
-    if (p.y > DESIGN_H * 0.45) {
-      // grab from the lower half — begin the swipe
-      this.dragging = true;
-      if (this.hint) {
-        this.tweens.add({ targets: this.hint, alpha: 0, duration: 200, onComplete: () => this.hint?.destroy() });
-        this.hint = undefined;
-      }
+    // grab only if the press is on/near the shot (generous radius, scales with the sprite).
+    const grabR = Math.max(this.shot.displayWidth, this.shot.displayHeight) * 0.75 + 40;
+    if (Phaser.Math.Distance.Between(p.x, p.y, this.shot.x, this.shot.y) > grabR) return;
+    this.dragging = true;
+    this.vx = 0;
+    this.vy = 0;
+    this.grabDX = this.shot.x - p.x;
+    this.grabDY = this.shot.y - p.y;
+    if (this.hint) {
+      this.tweens.add({ targets: this.hint, alpha: 0, duration: 200, onComplete: () => this.hint?.destroy() });
+      this.hint = undefined;
     }
   }
 
   private onMove(p: Phaser.Input.Pointer) {
-    if (!this.dragging || !this.shot) return;
-    this.track(p.x, Math.min(p.y, NEAR.y)); // only travels up the bar, never below the start line
+    if (!this.dragging) return;
+    const { x, y } = this.clampToTable(p.x + this.grabDX, p.y + this.grabDY);
+    this.shot.x = x;
+    this.shot.y = y;
+    this.applyPerspective();
   }
 
   private onUp(p: Phaser.Input.Pointer) {
-    if (!this.dragging || !this.shot) return;
+    if (!this.dragging) return;
     this.dragging = false;
-    const t = this.progressAt(this.shot.y);
-    const flickedUp = p.velocity.y < -350;
-    if (t > 0.3 || flickedUp) this.completeSlide();
-    else this.returnShot();
+    this.vx = Phaser.Math.Clamp(p.velocity.x, -2600, 2600);
+    this.vy = Phaser.Math.Clamp(p.velocity.y, -2600, 2600);
   }
 
-  // Carry the shot the rest of the way to the counter, then serve the next one.
-  private completeSlide() {
-    if (!this.shot) return;
-    this.busy = true;
-    const shot = this.shot;
-    this.shot = undefined;
-    const remaining = 1 - this.progressAt(shot.y);
-    this.tweens.add({
-      targets: shot,
-      x: CENTER_X,
-      y: FAR.y,
-      scale: FAR.scale,
-      ease: "Cubic.easeOut",
-      duration: 250 + remaining * 850,
-      onUpdate: () => shot.setDepth(shot.y),
-      onComplete: () => {
-        this.tweens.add({ targets: shot, alpha: 0, scale: FAR.scale * 0.88, duration: 220, onComplete: () => shot.destroy() });
-        this.serveShot();
-      },
-    });
-  }
-
-  // Not far enough — glide back to the ready position for another swipe.
-  private returnShot() {
-    if (!this.shot) return;
-    const shot = this.shot;
-    this.tweens.add({
-      targets: shot,
-      x: CENTER_X,
-      y: NEAR.y,
-      scale: NEAR.scale,
-      ease: "Back.easeOut",
-      duration: 320,
-      onUpdate: () => shot.setDepth(shot.y),
-    });
+  // Flick glide with friction, clamped to the table (stops at edges). Shot persists — never removed.
+  update(_t: number, dt: number) {
+    if (this.dragging || (Math.abs(this.vx) < 4 && Math.abs(this.vy) < 4)) {
+      this.vx = 0;
+      this.vy = 0;
+      return;
+    }
+    const step = dt / 1000;
+    const nx = this.shot.x + this.vx * step;
+    const ny = this.shot.y + this.vy * step;
+    const c = this.clampToTable(nx, ny);
+    if (c.x !== nx) this.vx = 0; // hit a side rail
+    if (c.y !== ny) this.vy = 0; // hit the near/far edge
+    this.shot.x = c.x;
+    this.shot.y = c.y;
+    this.applyPerspective();
+    const friction = Math.pow(0.9, dt / 16.67);
+    this.vx *= friction;
+    this.vy *= friction;
   }
 }
 
