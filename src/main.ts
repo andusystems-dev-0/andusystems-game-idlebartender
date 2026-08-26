@@ -17,7 +17,7 @@ const CENTER_X = DESIGN_W * 0.5;
 // The playable wooden table is a perspective trapezoid: wide at the near/bottom edge, narrow at the far
 // counter end. Shot scale interpolates near→far by height.
 const TABLE = {
-  nearY: 1185, // bottom (near the bartender) — the launch/rest position
+  nearY: 1140, // bottom (near the bartender) — the launch/rest position
   farY: 430, // top (at the counter)
   nearHalf: 330, // half-width at the bottom
   farHalf: 150, // half-width at the counter
@@ -26,10 +26,12 @@ const TABLE = {
 };
 
 // Flick + glide feel. Launch requires a genuine upward flick; distance scales with how hard you flick
-// (skill). Below the threshold the shot resets to the bottom instead of launching.
+// (skill). Below the threshold the shot resets to the bottom instead of launching. Flick speed is
+// measured by us in px/sec (Phaser's pointer.velocity is unit-unreliable across devices).
 const FLICK = {
-  minSpeed: 320, // release speed (px/sec) below which it's NOT a flick → reset to origin
-  boost: 2.2, // multiplies the flick velocity into launch velocity
+  window: 120, // ms of recent motion used to measure the flick speed
+  minSpeed: 400, // measured release speed (px/sec) below which it's NOT a flick → reset to origin
+  boost: 1.6, // multiplies the measured flick velocity into launch velocity
   maxSpeed: 5000, // hard cap (px/sec)
   friction: 0.98, // per-60fps-frame glide decay — higher glides farther
   settleSpeed: 12, // below this an in-flight shot is considered stopped
@@ -43,6 +45,12 @@ interface Flying {
   vy: number;
 }
 
+interface Sample {
+  x: number;
+  y: number;
+  t: number;
+}
+
 class BarScene extends Phaser.Scene {
   private shot!: Phaser.GameObjects.Image; // the current grabbable shot resting at the bottom
   private hint?: Phaser.GameObjects.Text;
@@ -52,6 +60,7 @@ class BarScene extends Phaser.Scene {
   private resetTween?: Phaser.Tweens.Tween;
   private flying: Flying[] = []; // shots currently gliding up the bar
   private rested: Phaser.GameObjects.Image[] = []; // shots that have come to rest (persist)
+  private samples: Sample[] = []; // recent pointer positions, for measuring the flick
 
   constructor() {
     super("bar");
@@ -93,6 +102,30 @@ class BarScene extends Phaser.Scene {
     return s;
   }
 
+  private now() {
+    return typeof performance !== "undefined" ? performance.now() : Date.now();
+  }
+
+  private pushSample(p: Phaser.Input.Pointer) {
+    this.samples.push({ x: p.x, y: p.y, t: this.now() });
+    if (this.samples.length > 10) this.samples.shift();
+  }
+
+  // Velocity (px/sec) of the pointer over the last FLICK.window ms of motion.
+  private measureFlick() {
+    const s = this.samples;
+    if (s.length < 2) return { vx: 0, vy: 0 };
+    const last = s[s.length - 1];
+    let first = s[s.length - 2];
+    for (let i = s.length - 1; i >= 0; i--) {
+      if (last.t - s[i].t <= FLICK.window) first = s[i];
+      else break;
+    }
+    const dt = (last.t - first.t) / 1000;
+    if (dt <= 0) return { vx: 0, vy: 0 };
+    return { vx: (last.x - first.x) / dt, vy: (last.y - first.y) / dt };
+  }
+
   private progressAt(y: number) {
     return Phaser.Math.Clamp((TABLE.nearY - y) / (TABLE.nearY - TABLE.farY), 0, 1);
   }
@@ -118,6 +151,8 @@ class BarScene extends Phaser.Scene {
     this.dragging = true;
     this.grabDX = this.shot.x - p.x;
     this.grabDY = this.shot.y - p.y;
+    this.samples = [];
+    this.pushSample(p);
     if (this.hint) {
       this.tweens.add({ targets: this.hint, alpha: 0, duration: 200, onComplete: () => this.hint?.destroy() });
       this.hint = undefined;
@@ -126,6 +161,7 @@ class BarScene extends Phaser.Scene {
 
   private onMove(p: Phaser.Input.Pointer) {
     if (!this.dragging) return;
+    this.pushSample(p);
     // wind up/aim only in the bottom launch zone.
     const ty = Phaser.Math.Clamp(p.y + this.grabDY, TABLE.nearY - FLICK.launchRange, TABLE.nearY);
     const { x, y } = this.clampToTable(p.x + this.grabDX, ty);
@@ -137,9 +173,9 @@ class BarScene extends Phaser.Scene {
   private onUp(p: Phaser.Input.Pointer) {
     if (!this.dragging) return;
     this.dragging = false;
+    this.pushSample(p);
 
-    const vx = p.velocity.x;
-    const vy = p.velocity.y;
+    const { vx, vy } = this.measureFlick();
     const speed = Math.hypot(vx, vy);
     const isFlick = vy < 0 && speed >= FLICK.minSpeed; // must be an upward flick, fast enough
 
@@ -162,7 +198,7 @@ class BarScene extends Phaser.Scene {
     this.shot = this.spawnShot();
   }
 
-  // Glide the launched shot back to the bottom launch spot (used when the release wasn't a flick).
+  // Snap the shot back to the bottom launch spot (used when the release wasn't a flick).
   private resetShot() {
     this.resetTween = this.tweens.add({
       targets: this.shot,
