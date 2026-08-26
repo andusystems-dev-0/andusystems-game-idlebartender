@@ -58,19 +58,25 @@ const cssInset = (name: "top" | "bottom"): number => {
   return v;
 };
 
+const isStandalone = () =>
+  (navigator as unknown as { standalone?: boolean }).standalone === true ||
+  (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+
 const fitViewport = () => {
   const el = document.getElementById("game");
   if (el) {
-    // OVER-COVER: make the container a bit TALLER than the visible viewport so ENVELOP (cover) always
-    // reaches the physical bottom — this defeats the iOS home-indicator gap and any short viewport
-    // report, detection-free. The extra height is just empty deck below the drink, cropped off-screen;
-    // the play area still fits vertically. Top-anchored so the drink/table stay put; width is cropped.
-    const pad = Math.max(56, cssInset("bottom") + 20);
+    const ih = window.innerHeight;
+    const sh = (typeof screen !== "undefined" && screen.height) || ih;
+    // In the home-screen app, innerHeight can report SHORTER than the physical screen (it subtracts the
+    // notch/home-indicator when not in cover mode) — that shortfall is the bottom bar. Size to the true
+    // device height (screen.height) so the container reaches the physical bottom; ENVELOP then covers it
+    // (cropping the sides). In the browser, use the visible height so the drink stays clear of the toolbar.
+    const target = isStandalone() ? Math.max(ih, sh) + 8 : ih;
     el.style.top = "0";
     el.style.left = "0";
     el.style.right = "";
     el.style.bottom = "";
-    el.style.height = `${Math.round(window.innerHeight + pad)}px`;
+    el.style.height = `${Math.round(target)}px`;
   }
   // expose safe-area insets to the game in design-space pixels so the HUD can dodge the notch/island
   const factor = DESIGN.h / Math.max(1, window.innerHeight);
