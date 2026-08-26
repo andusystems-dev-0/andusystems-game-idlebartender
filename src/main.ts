@@ -12,8 +12,12 @@ import drink4Url from "./assets/drink4.png";
 // sequence (shot → second …). Two DIFFERENT drinks can't combine, so they bounce off each other.
 //
 // Design canvas matches the background art (720x1280, portrait). Scale.ENVELOP fills the whole screen.
-const DESIGN_W = 720;
-const DESIGN_H = 1280;
+// Supersample: render the whole game at SS× the design resolution so the canvas is downsampled on
+// screen — extra anti-aliasing and crisp art. All positions/speeds below are in design units × SS, so
+// gameplay is unchanged; only the rendered pixel density goes up.
+const SS = 2;
+const DESIGN_W = 720 * SS;
+const DESIGN_H = 1280 * SS;
 const CENTER_X = DESIGN_W * 0.5;
 
 // The drink sequence — each tier's texture. Index 0 is what you flick; touching two of a tier upgrades
@@ -33,24 +37,24 @@ const TIER_SCALE_MAX = 1.5;
 // The playable wooden table is a perspective trapezoid: wide at the near/bottom edge, narrow at the far
 // counter end. Measured from the background art. Shot scale interpolates near→far by height.
 const TABLE = {
-  nearY: 1140, // bottom (near the bartender) — the launch/rest position
-  farY: 334, // top (where the planks meet the counter)
-  nearHalf: 355, // half-width at the bottom (planks reach near the screen edges)
-  farHalf: 170, // half-width at the counter
-  nearScale: 0.36,
-  farScale: 0.15,
+  nearY: 1140 * SS, // bottom (near the bartender) — the launch/rest position
+  farY: 334 * SS, // top (where the planks meet the counter)
+  nearHalf: 355 * SS, // half-width at the bottom (planks reach near the screen edges)
+  farHalf: 170 * SS, // half-width at the counter
+  nearScale: 0.36 * SS,
+  farScale: 0.15 * SS,
 };
 
 // Flick + glide feel. Launch requires a genuine upward flick; distance scales with how hard you flick.
 // Below the threshold the shot resets to the bottom. Flick speed is measured by us in px/sec.
 const FLICK = {
   window: 120, // ms of recent motion used to measure the flick speed
-  minSpeed: 400, // measured release speed (px/sec) below which it's NOT a flick → reset to origin
+  minSpeed: 400 * SS, // measured release speed (px/sec) below which it's NOT a flick → reset to origin
   boost: 0.4, // multiplies the measured flick velocity into launch velocity
-  maxSpeed: 1250, // hard cap (px/sec)
+  maxSpeed: 1250 * SS, // hard cap (px/sec)
   friction: 0.98, // per-60fps-frame glide decay — higher glides farther
-  settleSpeed: 12, // below this a drink is considered stopped
-  launchRange: 260, // you can wind up/aim only this far up from the bottom
+  settleSpeed: 12 * SS, // below this a drink is considered stopped
+  launchRange: 260 * SS, // you can wind up/aim only this far up from the bottom
   restitution: 0.6, // bounciness when two different drinks collide (0=dead, 1=perfectly elastic)
   radius: 0.42, // collision radius as a fraction of a drink's displayed width
 };
@@ -100,10 +104,10 @@ class BarScene extends Phaser.Scene {
     this.hint = this.add
       .text(CENTER_X, DESIGN_H * 0.6, "flick matching drinks together", {
         fontFamily: "system-ui, -apple-system, sans-serif",
-        fontSize: "32px",
+        fontSize: `${32 * SS}px`,
         color: "#fff8e7",
         stroke: "#3a2410",
-        strokeThickness: 6,
+        strokeThickness: 6 * SS,
       })
       .setOrigin(0.5)
       .setDepth(10000)
@@ -197,8 +201,9 @@ class BarScene extends Phaser.Scene {
     img.setDepth(img.y); // nearer (larger y) draws in front
     const shadow = img.getData("shadow") as Phaser.GameObjects.Ellipse | undefined;
     if (shadow) {
-      shadow.setPosition(img.x, img.y + img.displayHeight * 0.015);
-      shadow.setScale((img.displayWidth * 0.78) / 100, (img.displayWidth * 0.22) / 100);
+      // origin is 0.82 down the art, so the glass base is ~0.15 of the height below it — sit the shadow there
+      shadow.setPosition(img.x, img.y + img.displayHeight * 0.15);
+      shadow.setScale((img.displayWidth * 0.72) / 100, (img.displayWidth * 0.2) / 100);
       shadow.setDepth(img.y - 1); // just beneath its own drink
     }
   }
@@ -217,7 +222,7 @@ class BarScene extends Phaser.Scene {
   }
 
   private onDown(p: Phaser.Input.Pointer) {
-    const grabR = Math.max(this.shot.displayWidth, this.shot.displayHeight) * 0.75 + 60;
+    const grabR = Math.max(this.shot.displayWidth, this.shot.displayHeight) * 0.75 + 60 * SS;
     if (Phaser.Math.Distance.Between(p.x, p.y, this.shot.x, this.shot.y) > grabR) return;
     this.resetTween?.stop();
     this.resetTween = undefined;
@@ -408,12 +413,19 @@ const game = new Phaser.Game({
 // Mobile browsers (esp. iOS Safari) report 100vh as the *large* viewport that extends behind the
 // toolbars, so the bottom of the canvas — and the drink resting there — was pushed out of view. Pin the
 // container to the actual visible height and re-fit Phaser whenever it changes (toolbar show/hide, rotate).
+const supportsDvh = typeof CSS !== "undefined" && !!CSS.supports && CSS.supports("height", "100dvh");
 const fitViewport = () => {
   const el = document.getElementById("game");
-  if (el) el.style.height = `${window.innerHeight}px`;
+  // Where 100dvh is supported (modern iOS/Android) the CSS already tracks the visible viewport exactly
+  // in both the browser and the home-screen app — don't fight it with a pixel height (that was leaving a
+  // bottom gap in standalone). Only fall back to a measured height on older browsers.
+  if (el) {
+    if (supportsDvh) el.style.removeProperty("height");
+    else el.style.height = `${window.innerHeight}px`;
+  }
   if (game.scale) game.scale.refresh();
 };
 game.events.once("ready", fitViewport);
 window.addEventListener("resize", fitViewport);
-window.addEventListener("orientationchange", () => window.setTimeout(fitViewport, 150));
+window.addEventListener("orientationchange", () => window.setTimeout(fitViewport, 200));
 fitViewport();
