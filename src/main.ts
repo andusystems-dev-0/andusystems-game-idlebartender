@@ -18,9 +18,9 @@ const CENTER_X = DESIGN_W * 0.5;
 // counter end. Shot scale interpolates near→far by height.
 const TABLE = {
   nearY: 1140, // bottom (near the bartender) — the launch/rest position
-  farY: 430, // top (at the counter)
-  nearHalf: 330, // half-width at the bottom
-  farHalf: 150, // half-width at the counter
+  farY: 334, // top (where the planks meet the counter) — measured from the background art
+  nearHalf: 355, // half-width at the bottom (planks reach near the screen edges)
+  farHalf: 170, // half-width at the counter
   nearScale: 0.36,
   farScale: 0.15,
 };
