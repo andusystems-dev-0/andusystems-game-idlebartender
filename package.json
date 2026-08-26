@@ -9,8 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "phaser": "^3.80.1",
-    "@andusystems/games-sdk": "file:../andusystems-games-sdk"
+    "phaser": "^3.80.1"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
