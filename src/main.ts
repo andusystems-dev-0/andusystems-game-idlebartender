@@ -31,8 +31,8 @@ const TABLE = {
 const FLICK = {
   window: 120, // ms of recent motion used to measure the flick speed
   minSpeed: 400, // measured release speed (px/sec) below which it's NOT a flick → reset to origin
-  boost: 1.6, // multiplies the measured flick velocity into launch velocity
-  maxSpeed: 5000, // hard cap (px/sec)
+  boost: 0.8, // multiplies the measured flick velocity into launch velocity
+  maxSpeed: 2500, // hard cap (px/sec)
   friction: 0.98, // per-60fps-frame glide decay — higher glides farther
   settleSpeed: 12, // below this an in-flight shot is considered stopped
   launchRange: 260, // you can wind up/aim only this far up from the bottom
