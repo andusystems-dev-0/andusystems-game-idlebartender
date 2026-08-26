@@ -92,6 +92,9 @@ class BarScene extends Phaser.Scene {
   }
 
   create() {
+    // Linear filtering so scaled-down drink art has smooth, non-pixelated edges.
+    [...TIER_TEX, "bg"].forEach((k) => this.textures.get(k).setFilter(Phaser.Textures.FilterMode.LINEAR));
+
     this.add.image(DESIGN_W / 2, DESIGN_H / 2, "bg").setDisplaySize(DESIGN_W, DESIGN_H).setDepth(0);
 
     this.hint = this.add
@@ -116,10 +119,18 @@ class BarScene extends Phaser.Scene {
   }
 
   private spawnDrink(tier: number, x: number, y: number) {
+    // a faint contact shadow that sits on the table under the drink and tracks it
+    const shadow = this.add.ellipse(x, y, 100, 100, 0x000000, 0.16).setDepth(y - 1);
     const s = this.add.image(x, y, TIER_TEX[tier]).setOrigin(0.5, 0.82);
     s.setData("tier", tier);
+    s.setData("shadow", shadow);
     this.applyPerspective(s);
     return s;
+  }
+
+  private destroyDrink(img: Phaser.GameObjects.Image) {
+    (img.getData("shadow") as Phaser.GameObjects.GameObject | undefined)?.destroy();
+    img.destroy();
   }
 
   // Size multiplier for a tier: first tier → TIER_SCALE_MIN, last tier → TIER_SCALE_MAX (linear).
@@ -184,6 +195,12 @@ class BarScene extends Phaser.Scene {
     const tier = (img.getData("tier") as number) || 0;
     img.setScale(base * this.tierScale(tier));
     img.setDepth(img.y); // nearer (larger y) draws in front
+    const shadow = img.getData("shadow") as Phaser.GameObjects.Ellipse | undefined;
+    if (shadow) {
+      shadow.setPosition(img.x, img.y + img.displayHeight * 0.015);
+      shadow.setScale((img.displayWidth * 0.78) / 100, (img.displayWidth * 0.22) / 100);
+      shadow.setDepth(img.y - 1); // just beneath its own drink
+    }
   }
 
   private clampToTable(x: number, y: number) {
@@ -194,6 +211,8 @@ class BarScene extends Phaser.Scene {
   }
 
   private radius(p: Puck) {
+    // displayWidth reflects the live perspective + tier scale, so the collision hitbox scales with the
+    // drawn drink — a bigger (higher-tier / nearer) drink is a bigger target.
     return p.img.displayWidth * FLICK.radius;
   }
 
@@ -293,7 +312,10 @@ class BarScene extends Phaser.Scene {
 
     this.resolveCollisions();
 
-    while (this.pucks.length > PUCK_CAP) this.pucks.shift()?.img.destroy();
+    while (this.pucks.length > PUCK_CAP) {
+      const old = this.pucks.shift();
+      if (old) this.destroyDrink(old.img);
+    }
   }
 
   private resolveCollisions() {
@@ -350,8 +372,8 @@ class BarScene extends Phaser.Scene {
     const tier = a.tier + 1;
     const vx = (a.vx + b.vx) * 0.2;
     const vy = (a.vy + b.vy) * 0.2;
-    a.img.destroy();
-    b.img.destroy();
+    this.destroyDrink(a.img);
+    this.destroyDrink(b.img);
     this.pucks.splice(j, 1); // remove higher index first
     this.pucks.splice(i, 1);
     const img = this.spawnDrink(tier, mx, my);
@@ -366,6 +388,14 @@ const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
   backgroundColor: "#0b1e3f",
+  // Smooth (not pixelated) scaling of the drink art.
+  render: {
+    antialias: true,
+    antialiasGL: true,
+    roundPixels: false,
+    pixelArt: false,
+    mipmapFilter: "LINEAR",
+  },
   scale: {
     mode: Phaser.Scale.ENVELOP,
     autoCenter: Phaser.Scale.CENTER_BOTH,
