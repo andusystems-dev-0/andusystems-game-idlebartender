@@ -3,9 +3,14 @@ import { DESIGN } from "./config";
 import { BarScene } from "./BarScene";
 import * as G from "./state";
 import { initUI } from "./ui";
+import bgUrl from "./assets/background.jpg";
 
 // Load the save (and grant offline earnings) before the game boots.
 G.load();
+
+// Paint the beach behind the canvas too, so any sliver the canvas doesn't cover shows the bar
+// continuing (never a black/blank bar).
+document.body.style.background = `#c76914 url(${bgUrl}) center / cover no-repeat`;
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
