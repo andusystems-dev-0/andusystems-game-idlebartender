@@ -86,3 +86,22 @@ if (window.matchMedia) window.matchMedia("(display-mode: standalone)").addEventL
 // iOS settles the viewport after first paint — re-fit a few times.
 [80, 250, 600, 1200].forEach((ms) => window.setTimeout(fitViewport, ms));
 fitViewport();
+
+// ── TEMP DIAGNOSTIC: on-screen readout of the real viewport/canvas geometry ──
+const dbg = document.createElement("div");
+dbg.style.cssText =
+  "position:fixed;top:45%;left:8px;z-index:9999;font:13px/1.4 monospace;color:#000;" +
+  "background:rgba(255,255,255,0.85);padding:6px 8px;border-radius:6px;white-space:pre;pointer-events:none;";
+document.body.appendChild(dbg);
+const updateDbg = () => {
+  const rect = game.canvas.getBoundingClientRect();
+  const el = document.getElementById("game");
+  dbg.textContent =
+    `innerH=${window.innerHeight} screenH=${screen.height}\n` +
+    `safeTop=${cssInset("top")} safeBot=${cssInset("bottom")}\n` +
+    `gameH=${el?.clientHeight}\n` +
+    `canvTop=${Math.round(rect.top)} canvBot=${Math.round(rect.bottom)}\n` +
+    `canvH=${Math.round(rect.height)} standalone=${(navigator as unknown as { standalone?: boolean }).standalone}`;
+};
+[100, 400, 900, 1600].forEach((ms) => window.setTimeout(updateDbg, ms));
+window.addEventListener("resize", updateDbg);
