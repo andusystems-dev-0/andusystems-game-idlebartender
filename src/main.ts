@@ -414,18 +414,30 @@ const game = new Phaser.Game({
 // toolbars, so the bottom of the canvas — and the drink resting there — was pushed out of view. Pin the
 // container to the actual visible height and re-fit Phaser whenever it changes (toolbar show/hide, rotate).
 const supportsDvh = typeof CSS !== "undefined" && !!CSS.supports && CSS.supports("height", "100dvh");
+const isStandalone = () =>
+  (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+  (navigator as unknown as { standalone?: boolean }).standalone === true;
 const fitViewport = () => {
   const el = document.getElementById("game");
-  // Where 100dvh is supported (modern iOS/Android) the CSS already tracks the visible viewport exactly
-  // in both the browser and the home-screen app — don't fight it with a pixel height (that was leaving a
-  // bottom gap in standalone). Only fall back to a measured height on older browsers.
   if (el) {
-    if (supportsDvh) el.style.removeProperty("height");
-    else el.style.height = `${window.innerHeight}px`;
+    if (isStandalone()) {
+      // Home-screen app: no browser chrome to dodge, and 100dvh can report short of the real screen on
+      // iOS (leaving a bottom bar). Pin to all four edges so it fills the whole screen exactly.
+      el.style.height = "auto"; // override CSS height so top+bottom define the box
+      el.style.top = "0";
+      el.style.right = "0";
+      el.style.bottom = "0";
+      el.style.left = "0";
+    } else if (supportsDvh) {
+      el.style.removeProperty("height"); // CSS 100dvh tracks the visible (toolbar-aware) viewport
+    } else {
+      el.style.height = `${window.innerHeight}px`; // old-browser fallback
+    }
   }
   if (game.scale) game.scale.refresh();
 };
 game.events.once("ready", fitViewport);
 window.addEventListener("resize", fitViewport);
 window.addEventListener("orientationchange", () => window.setTimeout(fitViewport, 200));
+if (window.matchMedia) window.matchMedia("(display-mode: standalone)").addEventListener?.("change", fitViewport);
 fitViewport();
