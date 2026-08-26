@@ -96,9 +96,6 @@ export class BarScene extends Phaser.Scene {
     const onPrestige = () => this.clearTable();
     G.bus.on("prestige", onPrestige);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => G.bus.off("prestige", onPrestige));
-
-    // run the HUD/shop overlay on top
-    if (!this.scene.isActive("ui")) this.scene.launch("ui");
   }
 
   // ── placeholder + particle textures ────────────────────────────────────────

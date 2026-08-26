@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import { DESIGN } from "./config";
 import { BarScene } from "./BarScene";
-import { UIScene } from "./UIScene";
 import * as G from "./state";
+import { initUI } from "./ui";
 
 // Load the save (and grant offline earnings) before the game boots.
 G.load();
@@ -10,7 +10,8 @@ G.load();
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
-  backgroundColor: "#0b1e3f",
+  // matches the bar art's bottom edge so any sliver the canvas misses blends in
+  backgroundColor: "#c76914",
   render: {
     antialias: true,
     antialiasGL: true,
@@ -24,8 +25,11 @@ const game = new Phaser.Game({
     width: DESIGN.w,
     height: DESIGN.h,
   },
-  scene: [BarScene, UIScene],
+  scene: [BarScene],
 });
+
+// DOM/CSS UI overlay (HUD, shop, prestige) layered over the canvas.
+initUI();
 
 // Persist when the tab/app is backgrounded or closed.
 const flush = () => G.save();
