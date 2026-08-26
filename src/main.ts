@@ -23,6 +23,11 @@ const PUCK_CAP = 16; // safety bound on drinks on the table
 // Each drink you flick is a random tier: tier 0 is most common and every higher tier is only this
 // fraction as likely (exponential falloff) — so you get mostly shots, some seconds, rarer beyond.
 const SPAWN_DECAY = 0.2;
+// Size multiplier by tier, applied on top of the perspective scale: the first tier is drawn at
+// TIER_SCALE_MIN and the last tier at TIER_SCALE_MAX, ramped linearly across MAX_TIER. Recalibrates
+// automatically as more tiers are added.
+const TIER_SCALE_MIN = 0.5;
+const TIER_SCALE_MAX = 1.5;
 
 // The playable wooden table is a perspective trapezoid: wide at the near/bottom edge, narrow at the far
 // counter end. Measured from the background art. Shot scale interpolates near→far by height.
@@ -110,8 +115,15 @@ class BarScene extends Phaser.Scene {
 
   private spawnDrink(tier: number, x: number, y: number) {
     const s = this.add.image(x, y, TIER_TEX[tier]).setOrigin(0.5, 0.82);
+    s.setData("tier", tier);
     this.applyPerspective(s);
     return s;
+  }
+
+  // Size multiplier for a tier: first tier → TIER_SCALE_MIN, last tier → TIER_SCALE_MAX (linear).
+  private tierScale(tier: number) {
+    if (MAX_TIER <= 0) return TIER_SCALE_MIN;
+    return Phaser.Math.Linear(TIER_SCALE_MIN, TIER_SCALE_MAX, tier / MAX_TIER);
   }
 
   // Pick a tier with exponential falloff (mostly tier 0), then place the next grabbable drink.
@@ -166,7 +178,9 @@ class BarScene extends Phaser.Scene {
 
   private applyPerspective(img: Phaser.GameObjects.Image) {
     const t = this.progressAt(img.y);
-    img.setScale(Phaser.Math.Linear(TABLE.nearScale, TABLE.farScale, t));
+    const base = Phaser.Math.Linear(TABLE.nearScale, TABLE.farScale, t);
+    const tier = (img.getData("tier") as number) || 0;
+    img.setScale(base * this.tierScale(tier));
     img.setDepth(img.y); // nearer (larger y) draws in front
   }
 
