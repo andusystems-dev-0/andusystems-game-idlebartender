@@ -19,6 +19,9 @@ const CENTER_X = DESIGN_W * 0.5;
 const TIER_TEX = ["shot", "second"];
 const MAX_TIER = TIER_TEX.length - 1;
 const PUCK_CAP = 16; // safety bound on drinks on the table
+// Each drink you flick is a random tier: tier 0 is most common and every higher tier is only this
+// fraction as likely (exponential falloff) — so you get mostly shots, some seconds, rarer beyond.
+const SPAWN_DECAY = 0.2;
 
 // The playable wooden table is a perspective trapezoid: wide at the near/bottom edge, narrow at the far
 // counter end. Measured from the background art. Shot scale interpolates near→far by height.
@@ -59,7 +62,8 @@ interface Sample {
 }
 
 class BarScene extends Phaser.Scene {
-  private shot!: Phaser.GameObjects.Image; // the current grabbable shot resting at the bottom (tier 0)
+  private shot!: Phaser.GameObjects.Image; // the current grabbable drink resting at the bottom
+  private shotTier = 0; // tier of the current grabbable drink
   private hint?: Phaser.GameObjects.Text;
   private dragging = false;
   private grabDX = 0;
@@ -94,7 +98,7 @@ class BarScene extends Phaser.Scene {
       .setAlpha(0);
     this.tweens.add({ targets: this.hint, alpha: 0.9, duration: 500 });
 
-    this.shot = this.spawnDrink(0, CENTER_X, TABLE.nearY);
+    this.spawnNextShot();
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onDown(p));
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => this.onMove(p));
@@ -106,6 +110,28 @@ class BarScene extends Phaser.Scene {
     const s = this.add.image(x, y, TIER_TEX[tier]).setOrigin(0.5, 0.82);
     this.applyPerspective(s);
     return s;
+  }
+
+  // Pick a tier with exponential falloff (mostly tier 0), then place the next grabbable drink.
+  private randomTier() {
+    const weights: number[] = [];
+    let w = 1;
+    for (let t = 0; t <= MAX_TIER; t++) {
+      weights.push(w);
+      w *= SPAWN_DECAY;
+    }
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let t = 0; t < weights.length; t++) {
+      r -= weights[t];
+      if (r < 0) return t;
+    }
+    return 0;
+  }
+
+  private spawnNextShot() {
+    this.shotTier = this.randomTier();
+    this.shot = this.spawnDrink(this.shotTier, CENTER_X, TABLE.nearY);
   }
 
   private now() {
@@ -203,9 +229,9 @@ class BarScene extends Phaser.Scene {
       lvx *= k;
       lvy *= k;
     }
-    this.pucks.push({ img: this.shot, tier: 0, vx: lvx, vy: lvy });
-    // A new shot is immediately ready at the bottom.
-    this.shot = this.spawnDrink(0, CENTER_X, TABLE.nearY);
+    this.pucks.push({ img: this.shot, tier: this.shotTier, vx: lvx, vy: lvy });
+    // A new (randomly-tiered) drink is immediately ready at the bottom.
+    this.spawnNextShot();
   }
 
   // Snap the shot back to the bottom launch spot (used when the release wasn't a flick).
