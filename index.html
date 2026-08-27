@@ -22,11 +22,16 @@
         background: #c76914;
         overflow: hidden;
       }
-      /* Dead-simple full-screen: pin all four edges. This is what any normal full-screen page does and it
-         fills the whole screen — no dvh / JS-height / over-cover gymnastics (those were the bug). */
+      /* Use the LARGE viewport (full screen incl. the safe areas). inset:0 / dvh were resolving to the
+         SMALL viewport on iOS (short by the safe areas = the bottom bar); 100lvh explicitly asks for the
+         full device height. */
       #game {
         position: fixed;
-        inset: 0;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh; /* fallback */
+        height: 100lvh; /* large viewport = full screen on iOS */
         overflow: hidden;
         touch-action: none;
       }
