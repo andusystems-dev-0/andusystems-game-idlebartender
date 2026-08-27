@@ -12,12 +12,14 @@ G.load();
 // that reaches into the iOS safe area (diagnostic showed its box extends past the screen bottom), so its
 // background IMAGE paints that strip. Root/body only paint the safe area with a COLOR (the iOS quirk that
 // was leaving the flat-orange bar), so #game is the one that actually fills it with the table image.
-const pageBg = `#c76914 url(${bgUrl}) top center / cover no-repeat`;
+// DIAGNOSTIC: distinct fallback colors per layer so a screenshot reveals which one the "bar" is.
+// html/body/#game bg color = MAGENTA (if the bar is magenta → it's the page/container bg color).
+const pageBg = `#ff00ff url(${bgUrl}) top center / cover no-repeat`;
 document.documentElement.style.background = pageBg;
 document.body.style.background = pageBg;
 const gameEl = document.getElementById("game");
 if (gameEl) gameEl.style.background = pageBg;
-// Real <img> backdrop — an image element (unlike a CSS bg) paints pixels into the iOS safe-area strip.
+// <img> backdrop kept (beach). If the bar shows beach/orange grain → the img/sprite reaches it.
 const bgImgEl = document.getElementById("bgimg") as HTMLImageElement | null;
 if (bgImgEl) bgImgEl.src = bgUrl;
 
@@ -105,6 +107,27 @@ if (window.matchMedia) window.matchMedia("(display-mode: standalone)").addEventL
 // iOS settles the viewport after first paint — re-fit a few times.
 [80, 250, 600, 1200].forEach((ms) => window.setTimeout(fitViewport, ms));
 fitViewport();
+
+// ── TEMP DIAGNOSTIC: geometry readout so I can see exactly what's happening on the device ──
+const dbg = document.createElement("div");
+dbg.style.cssText =
+  "position:fixed;top:40%;left:6px;z-index:99999;font:12px/1.35 monospace;color:#000;" +
+  "background:rgba(255,255,255,0.9);padding:6px;border-radius:6px;white-space:pre;pointer-events:none;";
+document.body.appendChild(dbg);
+const upd = () => {
+  const r = game.canvas.getBoundingClientRect();
+  const sc = game.scale;
+  dbg.textContent =
+    `iW=${window.innerWidth} iH=${window.innerHeight}\n` +
+    `sW=${screen.width} sH=${screen.height} dpr=${window.devicePixelRatio}\n` +
+    `safeT=${cssInset("top")} safeB=${cssInset("bottom")}\n` +
+    `game=${sc.gameSize.width}x${sc.gameSize.height} mode=${sc.scaleMode}\n` +
+    `disp=${Math.round(sc.displaySize.width)}x${Math.round(sc.displaySize.height)}\n` +
+    `canvas T=${Math.round(r.top)} B=${Math.round(r.bottom)} (h=${Math.round(r.height)})\n` +
+    `standalone=${(navigator as unknown as { standalone?: boolean }).standalone}`;
+};
+[150, 500, 1000, 1800].forEach((ms) => window.setTimeout(upd, ms));
+window.addEventListener("resize", upd);
 
 // ── Auto-update: a home-screen app resumes a cached page instead of reloading, so a new deploy can go
 // unseen. When the app becomes visible, check the live index.html's bundle hash; if it differs from the
