@@ -59,7 +59,11 @@ export class BarScene extends Phaser.Scene {
     }
     this.textures.get("bg").setFilter(Phaser.Textures.FilterMode.LINEAR);
 
-    this.add.image(DESIGN.w / 2, DESIGN.h / 2, "bg").setDisplaySize(DESIGN.w, DESIGN.h).setDepth(0);
+    // The bg art was extended below its original 1280px height with extra table so the ENVELOP-enlarged
+    // world is always covered (no background-color bar at the bottom). Anchor it at the top and map the
+    // ORIGINAL region to 0..DESIGN.h so the table lines up exactly; the added planks fall below the play area.
+    const bg = this.add.image(DESIGN.w / 2, 0, "bg").setOrigin(0.5, 0).setDepth(0);
+    bg.setDisplaySize(DESIGN.w, (bg.height / 1280) * DESIGN.h);
 
     this.hint = this.add
       .text(CENTER_X, DESIGN.h * 0.58, "flick matching drinks together", {
