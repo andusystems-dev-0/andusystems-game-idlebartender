@@ -8,11 +8,15 @@ import bgUrl from "./assets/background.jpg";
 // Load the save (and grant offline earnings) before the game boots.
 G.load();
 
-// Paint the bar art behind everything — on the ROOT + body, filling the ENTIRE viewport. The canvas is
-// TRANSPARENT (below), so any pixel the game doesn't draw shows this beach instead of a flat color bar.
+// Paint the bar art behind the (transparent) canvas. Crucially on the #game CONTAINER — a fixed element
+// that reaches into the iOS safe area (diagnostic showed its box extends past the screen bottom), so its
+// background IMAGE paints that strip. Root/body only paint the safe area with a COLOR (the iOS quirk that
+// was leaving the flat-orange bar), so #game is the one that actually fills it with the table image.
 const pageBg = `#c76914 url(${bgUrl}) top center / cover no-repeat`;
 document.documentElement.style.background = pageBg;
 document.body.style.background = pageBg;
+const gameEl = document.getElementById("game");
+if (gameEl) gameEl.style.background = pageBg;
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
