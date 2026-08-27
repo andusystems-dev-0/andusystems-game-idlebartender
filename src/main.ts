@@ -79,34 +79,3 @@ async function checkForUpdate() {
 }
 document.addEventListener("visibilitychange", checkForUpdate);
 window.addEventListener("pageshow", checkForUpdate);
-
-// ── TEMP DIAGNOSTIC: measure every viewport-height unit on the device + test if the bottom strip paints ──
-{
-  const probe = (h: string) => {
-    const d = document.createElement("div");
-    d.style.cssText = `position:fixed;top:0;left:0;width:1px;height:${h};visibility:hidden;`;
-    document.body.appendChild(d);
-    const v = Math.round(d.getBoundingClientRect().height);
-    d.remove();
-    return v;
-  };
-  // CYAN band placed INSIDE the reserved bottom strip: if it shows, content CAN paint there.
-  const cyan = document.createElement("div");
-  cyan.style.cssText = `position:fixed;left:0;right:0;top:${screen.height - 45}px;height:45px;background:#00ffff;z-index:99999;pointer-events:none;`;
-  document.body.appendChild(cyan);
-  // RED at bottom:0 to see where that anchors.
-  const red = document.createElement("div");
-  red.style.cssText = "position:fixed;left:0;right:0;bottom:0;height:10px;background:#ff0000;z-index:99999;pointer-events:none;";
-  document.body.appendChild(red);
-  const dbg = document.createElement("div");
-  dbg.style.cssText =
-    "position:fixed;top:34%;left:6px;right:6px;z-index:99999;font:12px/1.4 monospace;color:#000;background:rgba(255,255,255,0.93);padding:6px;white-space:pre-wrap;border-radius:6px;pointer-events:none;";
-  const vv = window.visualViewport;
-  dbg.textContent =
-    `vh=${probe("100vh")} svh=${probe("100svh")}\nlvh=${probe("100lvh")} dvh=${probe("100dvh")}\n` +
-    `-webkit-fill-avail=${probe("-webkit-fill-available")}\n` +
-    `inner=${window.innerHeight} screen=${screen.height}\n` +
-    `visualVP=${vv ? Math.round(vv.height) : "-"} docCH=${document.documentElement.clientHeight}\n` +
-    `CYAN band top=${screen.height - 45}  RED=bottom:0`;
-  document.body.appendChild(dbg);
-}

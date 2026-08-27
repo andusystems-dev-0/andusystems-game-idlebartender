@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Idle Bartender</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -22,16 +22,15 @@
         background: #c76914;
         overflow: hidden;
       }
-      /* Use the LARGE viewport (full screen incl. the safe areas). inset:0 / dvh were resolving to the
-         SMALL viewport on iOS (short by the safe areas = the bottom bar); 100lvh explicitly asks for the
-         full device height. */
+      /* On-device diagnostic proved 100vh = 852 = the full screen; the bottom bar was the MANIFEST
+         (display:standalone) forcing a status-bar-reserved 793px webview that overrode black-translucent.
+         With display:fullscreen the webview is the full 852 and 100vh fills it. */
       #game {
         position: fixed;
         top: 0;
         left: 0;
         width: 100vw;
-        height: 100vh; /* fallback */
-        height: 100lvh; /* large viewport = full screen on iOS */
+        height: 100vh;
         overflow: hidden;
         touch-action: none;
       }
