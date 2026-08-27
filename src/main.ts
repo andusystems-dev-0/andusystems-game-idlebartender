@@ -112,6 +112,50 @@ if (window.matchMedia) window.matchMedia("(display-mode: standalone)").addEventL
 [80, 250, 600, 1200].forEach((ms) => window.setTimeout(fitViewport, ms));
 fitViewport();
 
+// ── TEMP DEBUG OVERLAY: full geometry + reference strips (RED at bottom:0, LIME at innerHeight) ──
+{
+  const mkStrip = (css: string) => {
+    const d = document.createElement("div");
+    d.style.cssText = "position:fixed;left:0;right:0;height:8px;z-index:100000;pointer-events:none;opacity:0.9;" + css;
+    document.body.appendChild(d);
+    return d;
+  };
+  mkStrip("bottom:0;background:#ff0000;"); // RED: where does bottom:0 land?
+  const lime = mkStrip("background:#00ff00;"); // LIME: where innerHeight is
+  const dbg = document.createElement("div");
+  dbg.style.cssText =
+    "position:fixed;top:26%;left:6px;right:6px;z-index:100001;font:11px/1.3 monospace;color:#000;" +
+    "background:rgba(255,255,255,0.92);padding:6px;border-radius:6px;white-space:pre-wrap;pointer-events:none;";
+  document.body.appendChild(dbg);
+  const rct = (el: Element | null) => {
+    if (!el) return "null";
+    const r = el.getBoundingClientRect();
+    return `T${Math.round(r.top)} B${Math.round(r.bottom)} h${Math.round(r.height)}`;
+  };
+  const nav = navigator as unknown as { standalone?: boolean };
+  const upd = () => {
+    lime.style.top = `${window.innerHeight - 8}px`;
+    const vv = window.visualViewport;
+    const sc = game.scale;
+    dbg.textContent =
+      `inner ${window.innerWidth}x${window.innerHeight}\n` +
+      `visualVP ${vv ? Math.round(vv.width) + "x" + Math.round(vv.height) : "-"} offT${vv ? Math.round(vv.offsetTop) : "-"} pageT${vv ? Math.round(vv.pageTop) : "-"}\n` +
+      `screen ${screen.width}x${screen.height} dpr${window.devicePixelRatio}\n` +
+      `docClientH ${document.documentElement.clientHeight}\n` +
+      `safe T${cssInset("top")} B${cssInset("bottom")}\n` +
+      `#game ${rct(document.getElementById("game"))}\n` +
+      `#bgimg ${rct(document.getElementById("bgimg"))}\n` +
+      `canvas ${rct(game.canvas)}\n` +
+      `scale.game ${sc.gameSize.width}x${sc.gameSize.height} mode${sc.scaleMode}\n` +
+      `scale.disp ${Math.round(sc.displaySize.width)}x${Math.round(sc.displaySize.height)}\n` +
+      `scale.parent ${Math.round(sc.parentSize.width)}x${Math.round(sc.parentSize.height)}\n` +
+      `standalone mm=${window.matchMedia("(display-mode: standalone)").matches} nav=${nav.standalone}\n` +
+      `RED=bottom:0  LIME=innerHeight`;
+  };
+  [200, 600, 1200, 2000].forEach((ms) => window.setTimeout(upd, ms));
+  window.addEventListener("resize", upd);
+}
+
 // ── Auto-update: a home-screen app resumes a cached page instead of reloading, so a new deploy can go
 // unseen. When the app becomes visible, check the live index.html's bundle hash; if it differs from the
 // one we're running, reload to pick up the latest. (State is saved, so a reload is safe.)
