@@ -12,14 +12,15 @@ G.load();
 // that reaches into the iOS safe area (diagnostic showed its box extends past the screen bottom), so its
 // background IMAGE paints that strip. Root/body only paint the safe area with a COLOR (the iOS quirk that
 // was leaving the flat-orange bar), so #game is the one that actually fills it with the table image.
-// DIAGNOSTIC: distinct fallback colors per layer so a screenshot reveals which one the "bar" is.
-// html/body/#game bg color = MAGENTA (if the bar is magenta → it's the page/container bg color).
-const pageBg = `#ff00ff url(${bgUrl}) top center / cover no-repeat`;
+// Fallback color (matches the bar art's bottom) behind everything.
+const pageBg = "#c76914";
 document.documentElement.style.background = pageBg;
 document.body.style.background = pageBg;
 const gameEl = document.getElementById("game");
 if (gameEl) gameEl.style.background = pageBg;
-// <img> backdrop kept (beach). If the bar shows beach/orange grain → the img/sprite reaches it.
+// Real <img> backdrop (beach). An image ELEMENT paints pixels into the iOS home-indicator safe area
+// (a CSS background only fills it with a color). It's sized in fitViewport() to the true device height
+// so it reaches the physical bottom — CSS height:100% came up short of the screen (that was the bar).
 const bgImgEl = document.getElementById("bgimg") as HTMLImageElement | null;
 if (bgImgEl) bgImgEl.src = bgUrl;
 
@@ -74,16 +75,20 @@ const isStandalone = () =>
 const DESIGN_ASPECT = DESIGN.w / DESIGN.h; // 0.5625 (portrait)
 
 const fitViewport = () => {
-  const el = document.getElementById("game");
-  if (el) {
-    const ih = window.innerHeight;
-    const sh = (typeof screen !== "undefined" && screen.height) || ih;
-    const target = isStandalone() ? Math.max(ih, sh) + 8 : ih;
-    el.style.top = "0";
-    el.style.left = "0";
-    el.style.right = "";
-    el.style.bottom = "";
-    el.style.height = `${Math.round(target)}px`;
+  const ih = window.innerHeight;
+  const sh = (typeof screen !== "undefined" && screen.height) || ih;
+  // Size to the true device height so both the canvas and the <img> backdrop reach the physical bottom
+  // (innerHeight is short by the safe areas — that shortfall was the home-indicator bar).
+  const target = isStandalone() ? Math.max(ih, sh) + 8 : ih;
+  for (const id of ["game", "bgimg"]) {
+    const e = document.getElementById(id);
+    if (!e) continue;
+    e.style.top = "0";
+    e.style.left = "0";
+    e.style.right = "";
+    e.style.bottom = "";
+    e.style.width = "100vw";
+    e.style.height = `${Math.round(target)}px`;
   }
   // Scale by HEIGHT always. When the screen is TALLER/narrower than the portrait design (a phone),
   // ENVELOP fills the height and crops the sides → no bars. When the screen is WIDER than the design
@@ -107,27 +112,6 @@ if (window.matchMedia) window.matchMedia("(display-mode: standalone)").addEventL
 // iOS settles the viewport after first paint — re-fit a few times.
 [80, 250, 600, 1200].forEach((ms) => window.setTimeout(fitViewport, ms));
 fitViewport();
-
-// ── TEMP DIAGNOSTIC: geometry readout so I can see exactly what's happening on the device ──
-const dbg = document.createElement("div");
-dbg.style.cssText =
-  "position:fixed;top:40%;left:6px;z-index:99999;font:12px/1.35 monospace;color:#000;" +
-  "background:rgba(255,255,255,0.9);padding:6px;border-radius:6px;white-space:pre;pointer-events:none;";
-document.body.appendChild(dbg);
-const upd = () => {
-  const r = game.canvas.getBoundingClientRect();
-  const sc = game.scale;
-  dbg.textContent =
-    `iW=${window.innerWidth} iH=${window.innerHeight}\n` +
-    `sW=${screen.width} sH=${screen.height} dpr=${window.devicePixelRatio}\n` +
-    `safeT=${cssInset("top")} safeB=${cssInset("bottom")}\n` +
-    `game=${sc.gameSize.width}x${sc.gameSize.height} mode=${sc.scaleMode}\n` +
-    `disp=${Math.round(sc.displaySize.width)}x${Math.round(sc.displaySize.height)}\n` +
-    `canvas T=${Math.round(r.top)} B=${Math.round(r.bottom)} (h=${Math.round(r.height)})\n` +
-    `standalone=${(navigator as unknown as { standalone?: boolean }).standalone}`;
-};
-[150, 500, 1000, 1800].forEach((ms) => window.setTimeout(upd, ms));
-window.addEventListener("resize", upd);
 
 // ── Auto-update: a home-screen app resumes a cached page instead of reloading, so a new deploy can go
 // unseen. When the app becomes visible, check the live index.html's bundle hash; if it differs from the
