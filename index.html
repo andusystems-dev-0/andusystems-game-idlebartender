@@ -15,14 +15,20 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Idle Bartender" />
     <style>
-      html,
+      html {
+        height: 100%;
+      }
       body {
         margin: 0;
         padding: 0;
-        height: 100%;
+        /* Slightly TALLER than the viewport so the document is scrollable. iOS standalone only grants a
+           full-height (large) viewport to scrollable pages; a locked overflow:hidden page gets the SHORT
+           viewport (= the 59px bottom bar). #game is fixed, covers everything, and eats every touch
+           (touch-action:none), so this never actually scrolls. */
+        min-height: calc(100vh + 2px);
+        overscroll-behavior: none;
         /* matches the bottom of the bar art so any sliver the canvas misses blends in (never black) */
         background: #c76914;
-        overflow: hidden;
       }
       /* On-device diagnostic proved 100vh = 852 = the full screen; the bottom bar was the MANIFEST
          (display:standalone) forcing a status-bar-reserved 793px webview that overrode black-translucent.

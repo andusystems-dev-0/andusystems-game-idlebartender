@@ -103,10 +103,15 @@ window.addEventListener("pageshow", checkForUpdate);
   dbg.style.cssText =
     "position:fixed;top:0;left:0;z-index:99999;font:11px/1.35 monospace;color:#000;background:rgba(255,255,255,0.92);padding:5px 7px;white-space:pre;border-radius:0 0 8px 0;pointer-events:none;";
   const vv = window.visualViewport;
-  dbg.textContent =
-    `inner=${window.innerHeight} screen=${screen.height} vv=${vv ? Math.round(vv.height) : "-"}\n` +
-    `vh=${probe("100vh")} dvh=${probe("100dvh")} lvh=${probe("100lvh")}\n` +
-    `sat=${probe("env(safe-area-inset-top)")} sab=${probe("env(safe-area-inset-bottom)")}\n` +
-    `navStandalone=${nav.standalone} fs=${mm("(display-mode:fullscreen)")} sa=${mm("(display-mode:standalone)")} br=${mm("(display-mode:browser)")}`;
+  const redraw = () =>
+    (dbg.textContent =
+      `inner=${window.innerHeight} screen=${screen.height} vv=${vv ? Math.round(vv.height) : "-"}\n` +
+      `vh=${probe("100vh")} dvh=${probe("100dvh")} lvh=${probe("100lvh")}\n` +
+      `sat=${probe("env(safe-area-inset-top)")} sab=${probe("env(safe-area-inset-bottom)")}\n` +
+      `scrollH=${document.documentElement.scrollHeight} canvasH=${Math.round((document.querySelector("#game canvas") as HTMLCanvasElement)?.getBoundingClientRect().height || 0)}\n` +
+      `navStandalone=${nav.standalone} fs=${mm("(display-mode:fullscreen)")} sa=${mm("(display-mode:standalone)")} br=${mm("(display-mode:browser)")}`);
+  redraw();
+  window.addEventListener("resize", redraw);
+  window.setTimeout(redraw, 600);
   document.body.appendChild(dbg);
 }
