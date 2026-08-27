@@ -35,6 +35,10 @@ const game = new Phaser.Game({
 // DOM/CSS UI overlay (HUD, shop, prestige) layered over the canvas.
 initUI();
 
+// Bring up cloud backup/sync in the background (local-first — never blocks boot). Reconciles with the
+// save-api and adopts a newer cloud save if this device is behind (e.g. a fresh install + restore code).
+void G.initCloud();
+
 // Persist when the tab/app is backgrounded or closed.
 const flush = () => G.save();
 window.addEventListener("visibilitychange", () => {

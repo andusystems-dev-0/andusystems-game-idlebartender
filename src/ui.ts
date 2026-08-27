@@ -53,6 +53,10 @@ export function initUI() {
   lastCallBtn = el("button", { class: "btn purple", onclick: openPrestige }, "Last Call", lastCallSub) as HTMLButtonElement;
   ui.append(el("div", { id: "hud-buttons" }, shopBtn, lastCallBtn));
 
+  // Cloud-save button (backup code / restore), tucked under the HUD.
+  ui.append(el("button", { class: "iconbtn", id: "cloudBtn", onclick: openCloud, "aria-label": "Cloud save" }, "☁"));
+  G.bus.on("cloudRestored", () => toast("Progress restored ☁"));
+
   modalRoot = el("div", { id: "modal-root" });
   toastEl = el("div", { id: "toast" });
   ui.append(modalRoot, toastEl);
@@ -149,6 +153,71 @@ function toast(msg: string) {
     toastEl.style.transition = "opacity 0.9s ease, top 0.9s ease";
     toastEl.style.top = "34%";
     toastEl.style.opacity = "0";
+  });
+}
+
+// ── cloud save (backup code + restore) ────────────────────────────────────────
+function openCloud() {
+  openModal((card) => {
+    card.append(el("h2", {}, "Cloud Save"));
+    const status = el("div", { class: "sub-h" });
+    card.append(status);
+    refreshFns.push(() => {
+      status.textContent = G.cloudOnline()
+        ? "Auto-backed up to the cloud ✓"
+        : "Saved on this device — cloud sync will resume when online";
+    });
+
+    card.append(el("div", { class: "section" }, "YOUR BACKUP CODE"));
+    card.append(
+      el("div", { class: "center-msg" }, "Keep this code. On a new phone or after reinstalling, paste it under Restore to get your progress back."),
+    );
+    const codeInput = el("input", { class: "codefield", readOnly: true, value: G.getBackupCode() }) as HTMLInputElement;
+    const copyBtn = el(
+      "button",
+      {
+        class: "buy ok",
+        onclick: async () => {
+          const code = G.getBackupCode();
+          try {
+            await navigator.clipboard.writeText(code);
+          } catch {
+            codeInput.focus();
+            codeInput.select();
+            try {
+              (document as unknown as { execCommand?: (c: string) => void }).execCommand?.("copy");
+            } catch {
+              /* clipboard blocked — the field is selected for manual copy */
+            }
+          }
+          toast("Backup code copied");
+        },
+      },
+      "Copy",
+    ) as HTMLButtonElement;
+    card.append(el("div", { class: "row" }, codeInput, copyBtn));
+
+    card.append(el("div", { class: "section" }, "RESTORE FROM A CODE"));
+    const restoreInput = el("input", { class: "codefield", placeholder: "paste a backup code" }) as HTMLInputElement;
+    const restoreBtn = el(
+      "button",
+      {
+        class: "buy no",
+        onclick: () => {
+          const code = restoreInput.value.trim();
+          if (!code) return;
+          if (code === G.getBackupCode()) {
+            toast("That's already this device");
+            return;
+          }
+          if (confirm("Replace this device's progress with the backup for that code? This can't be undone.")) {
+            G.restoreFromCode(code);
+          }
+        },
+      },
+      "Restore",
+    ) as HTMLButtonElement;
+    card.append(el("div", { class: "row" }, restoreInput, restoreBtn));
   });
 }
 

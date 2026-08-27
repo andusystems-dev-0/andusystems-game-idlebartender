@@ -2,11 +2,39 @@ import Phaser from "phaser";
 import {
   UPGRADES, BOONS, META, BASE_SPAWN_DECAY, BASE_CAPACITY, MAX_TIER, drinkValue, COMBO, PRESTIGE,
 } from "./config";
+import { AnduGames } from "./sdk";
 
-// Cross-scene event bus (merge/serve/prestige/buy).
+// Cross-scene event bus (merge/serve/prestige/buy/cloudRestored).
 export const bus = new Phaser.Events.EventEmitter();
 
-const SAVE_KEY = "idlebartender.save.v1";
+const SAVE_KEY = "idlebartender.save.v1"; // legacy/local blob — instant, synchronous, source of truth
+const GAME_ID = "idlebartender"; // registered slug in the shared save-api games registry
+const DEVICE_KEY = "andu:device_id"; // also the player's BACKUP CODE (see getBackupCode / restoreFromCode)
+
+// Cloud backup layer (durable, cross-device). The DEVICE is the source of truth; the save-api is a
+// backup + sync. Local-first: everything works offline; cloud kicks in when reachable.
+let cloud: AnduGames | null = null;
+
+/** The stable device id, generated + persisted on first run. This is the player's restore code. */
+export function getOrCreateDeviceId(): string {
+  let id = "";
+  try {
+    id = localStorage.getItem(DEVICE_KEY) || "";
+  } catch {
+    /* storage blocked */
+  }
+  if (!id) {
+    id = globalThis.crypto?.randomUUID?.() ?? `dev-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    try {
+      localStorage.setItem(DEVICE_KEY, id);
+    } catch {
+      /* ignore */
+    }
+  }
+  return id;
+}
+export const getBackupCode = (): string => getOrCreateDeviceId();
+export const cloudOnline = (): boolean => !!cloud && cloud.isOnline();
 
 // ── Persistent state ────────────────────────────────────────────────────────
 export interface Persist {
@@ -79,13 +107,64 @@ export function load() {
   save();
 }
 
-export function save() {
+function saveLocal() {
   S.lastSeen = Date.now();
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(S));
   } catch {
     /* storage full/blocked — ignore */
   }
+}
+
+export function save() {
+  saveLocal();
+  // Mirror to the cloud (debounced + flushed on hide by the SDK). No-op/queues if offline.
+  if (cloud) void cloud.save(S);
+}
+
+// ── Cloud backup / restore (durable across app deletion + new devices) ────────
+// Server progress is "ahead" when its lifetime totalScore exceeds the local one (totalScore only grows,
+// even across prestige) — that catches a fresh install with a restore code, or another device advancing.
+function serverAhead(server: Partial<Persist>): boolean {
+  return (server.totalScore ?? 0) > S.totalScore;
+}
+
+/** Bring up the cloud layer and reconcile. Call once after load(); never blocks the game (local-first). */
+export async function initCloud() {
+  try {
+    cloud = await AnduGames.init({ gameId: GAME_ID, env: "prod", deviceId: getOrCreateDeviceId() });
+    const server = (await cloud.load()) as Partial<Persist> | null;
+    if (server && serverAhead(server)) {
+      // Adopt the cloud save in place; the live HUD/scene read S directly, so no reload needed.
+      Object.assign(S, fresh(), server, {
+        prestige: { ...fresh().prestige, ...(server.prestige || {}) },
+        upgrades: { ...(server.upgrades || {}) },
+      });
+      saveLocal();
+      bus.emit("cloudRestored");
+    } else {
+      // Local is source of truth → back it up now.
+      void cloud.save(S);
+    }
+  } catch {
+    /* unreachable/offline — stay local-only; the next save() retries the sync */
+  }
+}
+
+/** Restore this device's progress from a backup code (another device's id). Reloads to apply cleanly. */
+export function restoreFromCode(code: string): boolean {
+  const c = code.trim();
+  if (!c) return false;
+  try {
+    localStorage.setItem(DEVICE_KEY, c); // become that player
+    localStorage.removeItem("andu:prod:token"); // force re-auth as the restored player
+    localStorage.removeItem(`andu:${GAME_ID}:save:default`); // drop the SDK's local copy
+    localStorage.removeItem(SAVE_KEY); // drop local blob so the cloud save is adopted on reboot
+  } catch {
+    return false;
+  }
+  location.reload();
+  return true;
 }
 
 // ── Level / cost helpers ────────────────────────────────────────────────────

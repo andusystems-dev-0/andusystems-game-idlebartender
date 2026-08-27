@@ -83,8 +83,44 @@
       .backdrop,
       .card,
       .x,
-      .banner {
+      .banner,
+      .iconbtn {
         pointer-events: auto;
+      }
+
+      /* round glass button (cloud-save) tucked under the HUD, top-right */
+      .iconbtn {
+        position: absolute;
+        top: calc(env(safe-area-inset-top) + 58px);
+        right: max(12px, env(safe-area-inset-right));
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 1px solid var(--hair);
+        background: var(--glass);
+        -webkit-backdrop-filter: blur(18px) saturate(1.2);
+        backdrop-filter: blur(18px) saturate(1.2);
+        color: var(--ink);
+        font-size: 22px;
+        line-height: 1;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+      }
+      .iconbtn:active {
+        transform: scale(0.94);
+      }
+      .codefield {
+        flex: 1;
+        min-width: 0;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid var(--hair);
+        border-radius: 12px;
+        padding: 11px 12px;
+        color: var(--ink);
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 13px;
+      }
+      .codefield::placeholder {
+        color: var(--muted);
       }
 
       /* top stats row (coins / score / tokens), over the bottle shelf above the table */
