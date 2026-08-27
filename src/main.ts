@@ -8,18 +8,18 @@ import bgUrl from "./assets/background.jpg";
 // Load the save (and grant offline earnings) before the game boots.
 G.load();
 
-// Paint the bar art behind everything — on the ROOT element, whose background fills the ENTIRE viewport
-// including the iOS home-indicator safe area that the canvas can't reach. Bottom-aligned so the strip
-// shows the table continuing (not a flat color bar). Applied to <html> and <body>.
-const pageBg = `#c76914 url(${bgUrl}) center bottom / cover no-repeat`;
+// Paint the bar art behind everything — on the ROOT + body, filling the ENTIRE viewport. The canvas is
+// TRANSPARENT (below), so any pixel the game doesn't draw shows this beach instead of a flat color bar.
+const pageBg = `#c76914 url(${bgUrl}) top center / cover no-repeat`;
 document.documentElement.style.background = pageBg;
 document.body.style.background = pageBg;
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
-  // matches the bar art's bottom edge so any sliver the canvas misses blends in
-  backgroundColor: "#c76914",
+  // Transparent canvas: no solid background color can ever show as a bar; uncovered pixels reveal the
+  // page's beach image instead.
+  transparent: true,
   render: {
     antialias: true,
     antialiasGL: true,
@@ -92,3 +92,26 @@ if (window.matchMedia) window.matchMedia("(display-mode: standalone)").addEventL
 // iOS settles the viewport after first paint — re-fit a few times.
 [80, 250, 600, 1200].forEach((ms) => window.setTimeout(fitViewport, ms));
 fitViewport();
+
+// ── Auto-update: a home-screen app resumes a cached page instead of reloading, so a new deploy can go
+// unseen. When the app becomes visible, check the live index.html's bundle hash; if it differs from the
+// one we're running, reload to pick up the latest. (State is saved, so a reload is safe.)
+const loadedBundle =
+  Array.from(document.querySelectorAll('script[type="module"][src]'))
+    .map((s) => (s as HTMLScriptElement).src)
+    .find((s) => /assets\/index-/.test(s)) || "";
+async function checkForUpdate() {
+  if (document.visibilityState !== "visible" || !loadedBundle) return;
+  try {
+    const html = await (await fetch(`./?_=${Date.now()}`, { cache: "no-store" })).text();
+    const m = html.match(/assets\/index-[A-Za-z0-9_-]+\.js/);
+    if (m && !loadedBundle.endsWith(m[0])) {
+      G.save();
+      location.reload();
+    }
+  } catch {
+    /* offline / fetch blocked — ignore */
+  }
+}
+document.addEventListener("visibilitychange", checkForUpdate);
+window.addEventListener("pageshow", checkForUpdate);
