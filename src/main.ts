@@ -80,38 +80,10 @@ async function checkForUpdate() {
 document.addEventListener("visibilitychange", checkForUpdate);
 window.addEventListener("pageshow", checkForUpdate);
 
-// ── TEMP DIAGNOSTIC: report the real iOS webview geometry + which display-mode/safe-areas iOS chose ──
-{
-  const probe = (h: string) => {
-    const d = document.createElement("div");
-    d.style.cssText = `position:fixed;top:0;left:0;width:1px;height:${h};visibility:hidden;`;
-    document.body.appendChild(d);
-    const v = Math.round(d.getBoundingClientRect().height);
-    d.remove();
-    return v;
-  };
-  const mm = (q: string) => window.matchMedia(q).matches;
-  const nav = navigator as unknown as { standalone?: boolean };
-  // CYAN band inside the reserved strip; RED at the true bottom:0 anchor.
-  const cyan = document.createElement("div");
-  cyan.style.cssText = `position:fixed;left:0;right:0;top:${screen.height - 45}px;height:45px;background:#00ffff;z-index:99999;pointer-events:none;`;
-  document.body.appendChild(cyan);
-  const red = document.createElement("div");
-  red.style.cssText = "position:fixed;left:0;right:0;bottom:0;height:8px;background:#ff0000;z-index:99999;pointer-events:none;";
-  document.body.appendChild(red);
-  const dbg = document.createElement("div");
-  dbg.style.cssText =
-    "position:fixed;top:0;left:0;z-index:99999;font:11px/1.35 monospace;color:#000;background:rgba(255,255,255,0.92);padding:5px 7px;white-space:pre;border-radius:0 0 8px 0;pointer-events:none;";
-  const vv = window.visualViewport;
-  const redraw = () =>
-    (dbg.textContent =
-      `inner=${window.innerHeight} screen=${screen.height} vv=${vv ? Math.round(vv.height) : "-"}\n` +
-      `vh=${probe("100vh")} dvh=${probe("100dvh")} lvh=${probe("100lvh")}\n` +
-      `sat=${probe("env(safe-area-inset-top)")} sab=${probe("env(safe-area-inset-bottom)")}\n` +
-      `scrollH=${document.documentElement.scrollHeight} canvasH=${Math.round((document.querySelector("#game canvas") as HTMLCanvasElement)?.getBoundingClientRect().height || 0)}\n` +
-      `navStandalone=${nav.standalone} fs=${mm("(display-mode:fullscreen)")} sa=${mm("(display-mode:standalone)")} br=${mm("(display-mode:browser)")}`);
-  redraw();
-  window.addEventListener("resize", redraw);
-  window.setTimeout(redraw, 600);
-  document.body.appendChild(dbg);
-}
+// iOS standalone grants the FULL-height viewport only to a scrollable document (see index.html body
+// min-height). Nudge the scroll to 1px on load/rotate so the large viewport is applied immediately;
+// #game is fixed and eats every touch, so there's nothing for the user to actually scroll.
+const nudge = () => window.scrollTo(0, 1);
+window.addEventListener("load", () => window.setTimeout(nudge, 50));
+window.addEventListener("orientationchange", () => window.setTimeout(nudge, 250));
+nudge();
