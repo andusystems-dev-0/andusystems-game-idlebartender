@@ -10,7 +10,9 @@
     <meta name="theme-color" content="#c76914" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- opaque status bar at the top; web content sits BELOW it and fills to the bottom edge (translucent
+         mode left an unpaintable strip at the bottom / home-indicator area on this iOS). -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="Idle Bartender" />
     <style>
       html,
