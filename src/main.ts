@@ -12,15 +12,14 @@ G.load();
 // that reaches into the iOS safe area (diagnostic showed its box extends past the screen bottom), so its
 // background IMAGE paints that strip. Root/body only paint the safe area with a COLOR (the iOS quirk that
 // was leaving the flat-orange bar), so #game is the one that actually fills it with the table image.
-// Fallback color (matches the bar art's bottom) behind everything.
+// Fallback color (matches the bar art's bottom) on the far-back layers only.
 const pageBg = "#c76914";
 document.documentElement.style.background = pageBg;
 document.body.style.background = pageBg;
-const gameEl = document.getElementById("game");
-if (gameEl) gameEl.style.background = pageBg;
-// Real <img> backdrop (beach). An image ELEMENT paints pixels into the iOS home-indicator safe area
-// (a CSS background only fills it with a color). It's sized in fitViewport() to the true device height
-// so it reaches the physical bottom — CSS height:100% came up short of the screen (that was the bar).
+// IMPORTANT: #game must have NO background — it sits above #bgimg (z-index), so an opaque #game bg would
+// OCCLUDE the <img> backdrop (that was the flat bar: the transparent canvas showed #game's own color).
+// With #game transparent, the canvas reveals the <img> beach behind it, incl. the home-indicator strip.
+// The <img> is sized in fitViewport() to the true device height so it reaches the physical bottom.
 const bgImgEl = document.getElementById("bgimg") as HTMLImageElement | null;
 if (bgImgEl) bgImgEl.src = bgUrl;
 
