@@ -17,6 +17,9 @@ document.documentElement.style.background = pageBg;
 document.body.style.background = pageBg;
 const gameEl = document.getElementById("game");
 if (gameEl) gameEl.style.background = pageBg;
+// Real <img> backdrop — an image element (unlike a CSS bg) paints pixels into the iOS safe-area strip.
+const bgImgEl = document.getElementById("bgimg") as HTMLImageElement | null;
+if (bgImgEl) bgImgEl.src = bgUrl;
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -66,21 +69,27 @@ const isStandalone = () =>
   (navigator as unknown as { standalone?: boolean }).standalone === true ||
   (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
 
+const DESIGN_ASPECT = DESIGN.w / DESIGN.h; // 0.5625 (portrait)
+
 const fitViewport = () => {
   const el = document.getElementById("game");
   if (el) {
     const ih = window.innerHeight;
     const sh = (typeof screen !== "undefined" && screen.height) || ih;
-    // In the home-screen app, innerHeight can report SHORTER than the physical screen (it subtracts the
-    // notch/home-indicator when not in cover mode) — that shortfall is the bottom bar. Size to the true
-    // device height (screen.height) so the container reaches the physical bottom; ENVELOP then covers it
-    // (cropping the sides). In the browser, use the visible height so the drink stays clear of the toolbar.
     const target = isStandalone() ? Math.max(ih, sh) + 8 : ih;
     el.style.top = "0";
     el.style.left = "0";
     el.style.right = "";
     el.style.bottom = "";
     el.style.height = `${Math.round(target)}px`;
+  }
+  // Scale by HEIGHT always. When the screen is TALLER/narrower than the portrait design (a phone),
+  // ENVELOP fills the height and crops the sides → no bars. When the screen is WIDER than the design
+  // (landscape/desktop), FIT fits by height and pillarboxes the sides → bars on the sides only, the full
+  // portrait shot shown (instead of ENVELOP zooming all the way in on width).
+  if (game.scale) {
+    const screenAspect = window.innerWidth / Math.max(1, window.innerHeight);
+    game.scale.scaleMode = screenAspect > DESIGN_ASPECT ? Phaser.Scale.FIT : Phaser.Scale.ENVELOP;
   }
   // expose safe-area insets to the game in design-space pixels so the HUD can dodge the notch/island
   const factor = DESIGN.h / Math.max(1, window.innerHeight);

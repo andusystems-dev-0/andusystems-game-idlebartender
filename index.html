@@ -35,6 +35,22 @@
       #game canvas {
         display: block;
       }
+      /* Real <img> backdrop behind the (transparent) canvas. An image ELEMENT paints its pixels into the
+         iOS safe-area strip (a CSS background only fills that strip with a COLOR) — so the home-indicator
+         area shows the bar art, not a flat bar. object-fit:cover matches the game's scale-by-height. */
+      #bgimg {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top center;
+        z-index: 0;
+        pointer-events: none;
+      }
+      #game {
+        z-index: 1;
+      }
 
       /* ── DOM UI overlay ─────────────────────────────────────────────────── */
       :root {
@@ -389,6 +405,7 @@
     </style>
   </head>
   <body>
+    <img id="bgimg" alt="" />
     <div id="game"></div>
     <div id="ui"></div>
     <script type="module" src="/src/main.ts"></script>
