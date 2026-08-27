@@ -6,7 +6,9 @@
     <title>Idle Bartender</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Manifest link intentionally OMITTED: on iOS a linked manifest overrides
+         apple-mobile-web-app-status-bar-style, forcing a status-bar-reserved (793px)
+         webview = the bottom bar. The apple metas below are the proven full-bleed path. -->
     <meta name="theme-color" content="#c76914" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
