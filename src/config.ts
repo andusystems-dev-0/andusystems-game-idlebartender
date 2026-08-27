@@ -7,14 +7,17 @@ export const SS = 2;
 export const DESIGN = { w: 720 * SS, h: 1280 * SS };
 export const CENTER_X = DESIGN.w / 2;
 
-// Playable wooden bar, a perspective trapezoid measured from the background art.
+// Playable wooden bar, a perspective trapezoid measured from the background art (edges detected per-row,
+// see scratchpad overlay). The far edge sits at y=430 — on the wide, solid part of the table, NOT the
+// narrow converging back lip at ~334 where drinks hung off the left. Symmetric within the planks so
+// nothing floats off the sides; the table is full-width below ~760 so the near edge fills it.
 export const TABLE = {
-  nearY: 1140 * SS, // bottom (launch/rest)
-  farY: 334 * SS, // top (counter)
-  nearHalf: 355 * SS,
-  farHalf: 170 * SS,
+  nearY: 1150 * SS, // bottom (launch/rest) — near the front of the bar
+  farY: 430 * SS, // top boundary — on wide solid wood, not the back lip
+  nearHalf: 350 * SS,
+  farHalf: 185 * SS,
   nearScale: 0.36 * SS,
-  farScale: 0.15 * SS,
+  farScale: 0.17 * SS,
 };
 
 // Flick + glide feel.
