@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <title>Idle Bartender</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -22,34 +22,16 @@
         background: #c76914;
         overflow: hidden;
       }
+      /* Dead-simple full-screen: pin all four edges. This is what any normal full-screen page does and it
+         fills the whole screen — no dvh / JS-height / over-cover gymnastics (those were the bug). */
       #game {
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        height: 100dvh;
+        inset: 0;
         overflow: hidden;
         touch-action: none;
       }
       #game canvas {
         display: block;
-      }
-      /* Real <img> backdrop behind the (transparent) canvas. An image ELEMENT paints its pixels into the
-         iOS safe-area strip (a CSS background only fills that strip with a COLOR) — so the home-indicator
-         area shows the bar art, not a flat bar. object-fit:cover matches the game's scale-by-height. */
-      #bgimg {
-        position: fixed;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        object-position: top center;
-        z-index: 0;
-        pointer-events: none;
-      }
-      #game {
-        z-index: 1;
       }
 
       /* ── DOM UI overlay ─────────────────────────────────────────────────── */
@@ -405,7 +387,6 @@
     </style>
   </head>
   <body>
-    <img id="bgimg" alt="" />
     <div id="game"></div>
     <div id="ui"></div>
     <script type="module" src="/src/main.ts"></script>
